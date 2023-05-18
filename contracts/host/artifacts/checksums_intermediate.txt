@@ -1,0 +1,1 @@
+c1c66ae355fbde5e61f6ac266399752d88141d2069129360950f9fc08ca5b18e  ./target/wasm32-unknown-unknown/release/host.wasm
