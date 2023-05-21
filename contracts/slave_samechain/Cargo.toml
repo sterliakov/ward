@@ -1,5 +1,5 @@
 [package]
-name = "host"
+name = "slave_samechain"
 version = "0.1.0"
 authors = ["STerliakov <terlya.stas@gmail.com>"]
 edition = "2021"
