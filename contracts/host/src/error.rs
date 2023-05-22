@@ -20,4 +20,13 @@ pub enum ContractError {
 
     #[error("No slave controller present on requested chain.")]
     ChainNotRegistered {},
+
+    #[error("Cannot transfer ownership to yourself.")]
+    SelfRecovery {},
+
+    #[error("Recovery already in progress.")]
+    AlreadyRecovering {},
+
+    #[error("The requested process was not initiated yet.")]
+    NotInProgress {},
 }

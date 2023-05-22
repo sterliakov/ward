@@ -6,6 +6,8 @@ pub struct InstantiateMsg {
     pub count: i32,
     pub recovery_pool: Vec<Addr>,
     pub approval_pool: Vec<Addr>,
+    pub recovery_approvals_needed: u32,
+    pub transfer_ownership_approvals_needed: u32,
 }
 
 #[cw_serde]
@@ -18,6 +20,8 @@ pub enum ExecuteMsg {
     RemoveApprovalMember { nonce: i32, member: Addr },
     RegisterSlave { nonce: i32, chain: String, addr: Addr },
     ExecuteSameChain { nonce: i32, body_proxy: CosmosMsg },
+    BeginSocialRecovery { nonce: i32, target_addr: Addr },
+    ApproveSocialRecovery { nonce: i32 },
 }
 
 #[cw_serde]
