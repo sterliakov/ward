@@ -1,2 +1,0 @@
-263001e9ce81eb7bc7afd9083c3b35b238b4f1cc92b27ab475d3c5665a37b89d  ./target/wasm32-unknown-unknown/release/host.wasm
-cff3275a1fb0ae670bfcd3075a66b54e94d8077782e9cd50a7bf77957c567ec1  ./target/wasm32-unknown-unknown/release/slave_samechain.wasm
