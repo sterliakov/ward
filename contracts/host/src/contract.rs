@@ -157,11 +157,36 @@ pub fn execute(
                 execute::approve_social_recovery(deps, info)
             )
         }
+        ExecuteMsg::BeginTransferOwnership { target_addr, nonce } => {
+            check_nonce!(
+                deps,
+                nonce,
+                execute::begin_transfer_ownership(deps, info, target_addr)
+            )
+        }
+        ExecuteMsg::ApproveTransferOwnership { nonce } => {
+            check_nonce!(
+                deps,
+                nonce,
+                execute::approve_transfer_ownership(deps, info)
+            )
+        }
     }
 }
 
 mod execute {
     use super::*;
+
+    macro_rules! require_first_vote {
+        ($storage:expr, $sender:expr) => {
+            let already_voted = ACTIVE_RECOVERY
+                .iter($storage)?
+                .any(|a| a == Ok($sender.clone()));
+            if already_voted {
+                return Err(ContractError::AlreadyVoted {});
+            }
+        };
+    }
 
     pub fn increment(deps: DepsMut) -> Result<Response, ContractError> {
         STATE.update(
@@ -299,15 +324,14 @@ mod execute {
         let state = STATE.load(deps.storage)?;
         let acs_needed = match why {
             "recovery" => state.recovery_approvals_needed,
-            "transfer_ownership" => state.transfer_ownership_approvals_needed,
+            // exclude self
+            "transfer_ownership" => {
+                state.transfer_ownership_approvals_needed + 1
+            }
             _ => panic!("Unknown ownership transfer reason."),
         };
         let acs_got = ACTIVE_RECOVERY.len(deps.storage)?;
-        if acs_got >= acs_needed {
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        Ok(acs_got >= acs_needed)
     }
 
     fn do_transfer_ownership(
@@ -332,6 +356,32 @@ mod execute {
         }
     }
 
+    fn _begin_recovery(
+        deps: DepsMut,
+        info: MessageInfo,
+        target_addr: Addr,
+        method: &str,
+    ) -> Result<Response, ContractError> {
+        while let Ok(Some(_)) = ACTIVE_RECOVERY.pop_back(deps.storage) {}
+        ACTIVE_RECOVERY.push_back(deps.storage, &info.sender)?;
+        STATE.update(
+            deps.storage,
+            |mut state| -> Result<_, ContractError> {
+                state.potential_owner = Some(target_addr);
+                Ok(state)
+            },
+        )?;
+
+        if can_transfer_ownership(&deps, method)? {
+            // Maybe some idiot allows one approval
+            do_transfer_ownership(deps)?;
+        }
+
+        Ok(Response::new()
+            .add_attribute("contract", "host")
+            .add_attribute("method", "begin_social_recovery"))
+    }
+
     pub fn begin_social_recovery(
         deps: DepsMut,
         info: MessageInfo,
@@ -351,18 +401,36 @@ mod execute {
         if let Some(_) = state.potential_owner {
             return Err(ContractError::AlreadyRecovering {});
         }
-        while let Ok(Some(_)) = ACTIVE_RECOVERY.pop_back(deps.storage) {}
-        ACTIVE_RECOVERY.push_back(deps.storage, &info.sender)?;
-        STATE.update(
-            deps.storage,
-            |mut state| -> Result<_, ContractError> {
-                state.potential_owner = Some(target_addr);
-                Ok(state)
-            },
-        )?;
+        _begin_recovery(deps, info, target_addr, "recovery")
+    }
 
-        if can_transfer_ownership(&deps, "recovery")? {
-            // Maybe some idiot allows one approval
+    pub fn begin_transfer_ownership(
+        deps: DepsMut,
+        info: MessageInfo,
+        target_addr: Addr,
+    ) -> Result<Response, ContractError> {
+        let state = STATE.load(deps.storage)?;
+        if target_addr == state.owner {
+            return Err(ContractError::SelfRecovery {});
+        }
+        if state.owner != info.sender {
+            // Only owner can initiate ownership transfer.
+            return Err(ContractError::Unauthorized {});
+        }
+        if let Some(_) = state.potential_owner {
+            return Err(ContractError::AlreadyRecovering {});
+        }
+        _begin_recovery(deps, info, target_addr, "transfer_ownership")
+    }
+
+    fn _approve_recovery(
+        deps: DepsMut,
+        info: MessageInfo,
+        method: &str,
+    ) -> Result<Response, ContractError> {
+        ACTIVE_RECOVERY.push_back(deps.storage, &info.sender)?;
+
+        if can_transfer_ownership(&deps, method)? {
             do_transfer_ownership(deps)?;
         }
 
@@ -383,18 +451,26 @@ mod execute {
             // TODO: add separate err for that.
             return Err(ContractError::Unauthorized {});
         }
+        require_first_vote!(deps.storage, &info.sender);
         if state.potential_owner == None {
             return Err(ContractError::NotInProgress {});
         }
-        ACTIVE_RECOVERY.push_back(deps.storage, &info.sender)?;
+        _approve_recovery(deps, info, "recovery")
+    }
 
-        if can_transfer_ownership(&deps, "recovery")? {
-            do_transfer_ownership(deps)?;
+    pub fn approve_transfer_ownership(
+        deps: DepsMut,
+        info: MessageInfo,
+    ) -> Result<Response, ContractError> {
+        let state = STATE.load(deps.storage)?;
+        if !state.recovery_pool.contains(&info.sender) {
+            return Err(ContractError::Unauthorized {});
         }
-
-        Ok(Response::new()
-            .add_attribute("contract", "host")
-            .add_attribute("method", "begin_social_recovery"))
+        require_first_vote!(deps.storage, &info.sender);
+        if state.potential_owner == None {
+            return Err(ContractError::NotInProgress {});
+        }
+        _approve_recovery(deps, info, "transfer_ownership")
     }
 }
 
@@ -456,20 +532,102 @@ mod tests {
             recovery_approvals_needed: 2,
             transfer_ownership_approvals_needed: 0,
         };
-        let _res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
+        instantiate(deps.as_mut(), mock_env(), info.clone(), msg)
+            .unwrap();
 
         let msg = ExecuteMsg::BeginSocialRecovery {
             nonce: 1,
             target_addr: new_owner.clone(),
         };
-        let _res = execute(deps.as_mut(), mock_env(), info_a, msg).unwrap();
+        execute(deps.as_mut(), mock_env(), info_a.clone(), msg).unwrap();
         let state = STATE.load(&deps.storage).unwrap();
         assert_eq!(state.potential_owner, Some(new_owner.clone()));
         assert_eq!(state.owner, creator);
 
-        let msg = ExecuteMsg::ApproveSocialRecovery { nonce: 2 };
-        let _res = execute(deps.as_mut(), mock_env(), info_b, msg);
+        let msg = ExecuteMsg::ApproveSocialRecovery { nonce: 1 };
+        let res = execute(deps.as_mut(), mock_env(), info_b.clone(), msg);
+        assert_eq!(res.unwrap_err(), ContractError::NonceAlreadyUsed {});
 
+        let msg = ExecuteMsg::ApproveSocialRecovery { nonce: 2 };
+        let res = execute(deps.as_mut(), mock_env(), info_a.clone(), msg);
+        assert_eq!(res.unwrap_err(), ContractError::AlreadyVoted {});
+        let state = STATE.load(&deps.storage).unwrap();
+        assert_eq!(state.potential_owner, Some(new_owner.clone()));
+        assert_eq!(state.owner, creator);
+
+        let msg = ExecuteMsg::ApproveSocialRecovery { nonce: 3 };
+        execute(deps.as_mut(), mock_env(), info_b.clone(), msg).unwrap();
+        let state = STATE.load(&deps.storage).unwrap();
+        assert_eq!(state.potential_owner, None);
+        assert_eq!(state.owner, new_owner.clone());
+    }
+
+    #[test]
+    fn transfer_ownership() {
+        let mut deps = mock_dependencies();
+
+        let info = mock_info("creator", &coins(2, "token"));
+        let creator = info.sender.clone();
+        let info_a = mock_info("a", &coins(2, "token"));
+        let info_b = mock_info("b", &coins(2, "token"));
+        let info_new_owner = mock_info("new_owner", &coins(2, "token"));
+        let new_owner = info_new_owner.sender.clone();
+
+        let msg = InstantiateMsg {
+            count: 17,
+            recovery_pool: vec![info_a.sender.clone(), info_b.sender.clone()],
+            approval_pool: vec![],
+            recovery_approvals_needed: 2,
+            transfer_ownership_approvals_needed: 2,
+        };
+        instantiate(deps.as_mut(), mock_env(), info.clone(), msg)
+            .unwrap();
+
+        let msg = ExecuteMsg::BeginTransferOwnership {
+            nonce: 1,
+            target_addr: creator.clone(),
+        };
+        let res = execute(deps.as_mut(), mock_env(), info.clone(), msg);
+        assert_eq!(res.unwrap_err(), ContractError::SelfRecovery {});
+
+        let msg = ExecuteMsg::BeginTransferOwnership {
+            nonce: 2,
+            target_addr: new_owner.clone(),
+        };
+        let res = execute(deps.as_mut(), mock_env(), info_a.clone(), msg);
+        assert_eq!(res.unwrap_err(), ContractError::Unauthorized {});
+
+        let msg = ExecuteMsg::BeginTransferOwnership {
+            nonce: 3,
+            target_addr: new_owner.clone(),
+        };
+        execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
+        let state = STATE.load(&deps.storage).unwrap();
+        assert_eq!(state.potential_owner, Some(new_owner.clone()));
+        assert_eq!(state.owner, creator);
+
+        let msg = ExecuteMsg::ApproveTransferOwnership { nonce: 4 };
+        let res = execute(deps.as_mut(), mock_env(), info.clone(), msg);
+        assert_eq!(res.unwrap_err(), ContractError::Unauthorized {});
+        let state = STATE.load(&deps.storage).unwrap();
+        assert_eq!(state.potential_owner, Some(new_owner.clone()));
+        assert_eq!(state.owner, creator);
+
+        let msg = ExecuteMsg::ApproveTransferOwnership { nonce: 5 };
+        execute(deps.as_mut(), mock_env(), info_a.clone(), msg).unwrap();
+        let state = STATE.load(&deps.storage).unwrap();
+        assert_eq!(state.potential_owner, Some(new_owner.clone()));
+        assert_eq!(state.owner, creator);
+
+        let msg = ExecuteMsg::ApproveTransferOwnership { nonce: 6 };
+        let res = execute(deps.as_mut(), mock_env(), info_a.clone(), msg);
+        assert_eq!(res.unwrap_err(), ContractError::AlreadyVoted {});
+        let state = STATE.load(&deps.storage).unwrap();
+        assert_eq!(state.potential_owner, Some(new_owner.clone()));
+        assert_eq!(state.owner, creator);
+
+        let msg = ExecuteMsg::ApproveTransferOwnership { nonce: 7 };
+        execute(deps.as_mut(), mock_env(), info_b.clone(), msg).unwrap();
         let state = STATE.load(&deps.storage).unwrap();
         assert_eq!(state.potential_owner, None);
         assert_eq!(state.owner, new_owner.clone());

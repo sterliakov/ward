@@ -22,6 +22,8 @@ pub enum ExecuteMsg {
     ExecuteSameChain { nonce: i32, body_proxy: CosmosMsg },
     BeginSocialRecovery { nonce: i32, target_addr: Addr },
     ApproveSocialRecovery { nonce: i32 },
+    BeginTransferOwnership { nonce: i32, target_addr: Addr },
+    ApproveTransferOwnership { nonce: i32 },
 }
 
 #[cw_serde]
