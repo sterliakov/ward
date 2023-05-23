@@ -131,7 +131,7 @@ pub fn execute(
             check_nonce!(
                 deps,
                 nonce,
-                execute::register_slave(deps, chain, addr)
+                execute::register_slave(deps, info, chain, addr)
             )
         }
         ExecuteMsg::ExecuteSameChain { body_proxy, nonce } => {
@@ -279,9 +279,12 @@ mod execute {
 
     pub fn register_slave(
         deps: DepsMut,
+        info: MessageInfo,
         chain: String,
         addr: Addr,
     ) -> Result<Response, ContractError> {
+        let state = STATE.load(deps.storage);
+        require_owner!(info, state);
         SLAVES.save(
             deps.storage,
             chain,
@@ -295,6 +298,8 @@ mod execute {
         info: MessageInfo,
         proxy_msg: CosmosMsg,
     ) -> Result<Response, ContractError> {
+        let state = STATE.load(deps.storage);
+        require_owner!(info, state);
         if let Ok(slave_contract) =
             SLAVES.load(deps.storage, "samechain".to_string())
         {
@@ -532,8 +537,7 @@ mod tests {
             recovery_approvals_needed: 2,
             transfer_ownership_approvals_needed: 0,
         };
-        instantiate(deps.as_mut(), mock_env(), info.clone(), msg)
-            .unwrap();
+        instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
 
         let msg = ExecuteMsg::BeginSocialRecovery {
             nonce: 1,
@@ -580,8 +584,7 @@ mod tests {
             recovery_approvals_needed: 2,
             transfer_ownership_approvals_needed: 2,
         };
-        instantiate(deps.as_mut(), mock_env(), info.clone(), msg)
-            .unwrap();
+        instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
 
         let msg = ExecuteMsg::BeginTransferOwnership {
             nonce: 1,
@@ -632,34 +635,4 @@ mod tests {
         assert_eq!(state.potential_owner, None);
         assert_eq!(state.owner, new_owner.clone());
     }
-
-    // #[test]
-    // fn reset() {
-    //     let mut deps = mock_dependencies();
-
-    //     let msg = InstantiateMsg { count: 17 };
-    //     let info = mock_info("creator", &coins(2, "token"));
-    //     let _res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
-
-    //     // beneficiary can release it
-    //     let unauth_info = mock_info("anyone", &coins(2, "token"));
-    //     let msg = ExecuteMsg::Reset { count: 5 };
-    //     let res = execute(deps.as_mut(), mock_env(), unauth_info, msg);
-    //     match res {
-    //         Err(ContractError::Unauthorized {}) => {}
-    //         _ => panic!("Must return unauthorized error"),
-    //     }
-
-    //     // only the original creator can reset the counter
-    //     let auth_info = mock_info("creator", &coins(2, "token"));
-    //     let msg = ExecuteMsg::Reset { count: 5 };
-    //     let _res =
-    //         execute(deps.as_mut(), mock_env(), auth_info, msg).unwrap();
-
-    //     // should now be 5
-    //     let res =
-    //         query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-    //     let value: GetCountResponse = from_binary(&res).unwrap();
-    //     assert_eq!(5, value.count);
-    // }
 }
