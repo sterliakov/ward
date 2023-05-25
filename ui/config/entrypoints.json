@@ -1,0 +1,25 @@
+{
+  "files": {
+    "index": {
+      "folder": "/",
+      "js": "src/index",
+      "html": "public/index.html"
+    },
+    "login": {
+      "folder": "/login",
+      "js": "src/login/index",
+      "html": "public/login.html"
+    },
+    "sign": {
+      "folder": "/sign",
+      "js": "src/sign/index",
+      "html": "public/sign.html"
+    }
+  },
+  "profiles": {
+    "mainpage": ["index"],
+    "sign": ["sign"],
+    "login": ["login"],
+    "test": ["login", "sign", "index"]
+  }
+}

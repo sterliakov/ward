@@ -31,7 +31,7 @@ repos:
     hooks:
       - id: prettier
         args: ['--config', '.prettierrc.json']
-        files: (\.jsx?|\.json)$
+        files: (\.jsx?|\.json|\.html)$
         additional_dependencies:
           - '@marketgridsys/prettier'
           - '@trivago/prettier-plugin-sort-imports'

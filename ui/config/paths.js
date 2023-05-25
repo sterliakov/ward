@@ -70,4 +70,19 @@ module.exports = {
   publicUrlOrPath,
 };
 
+const {
+  getEntryPointPaths,
+  getRequiredFilesList,
+  getBrowserFolder,
+  getWebPackPlugins,
+  getEntryPoints,
+} = require('./entrypaths');
+const entrypoints = getEntryPointPaths(resolveApp, resolveModule);
+module.exports.getEntryPoints = () => getEntryPoints(entrypoints);
+module.exports.getRequiredFiles = () =>
+  getRequiredFilesList(getEntryPoints(entrypoints));
+module.exports.getBrowserFolder = () =>
+  getBrowserFolder(getEntryPoints(entrypoints));
+module.exports.getWebPackPlugins = () =>
+  getWebPackPlugins(getEntryPoints(entrypoints));
 module.exports.moduleFileExtensions = moduleFileExtensions;
