@@ -20,7 +20,11 @@ module.exports = {
     sourceType: 'module',
     ecmaVersion: 13,
   },
-  // parser: '@typescript-eslint/parser',
+  settings: {
+    react: {
+      version: 'detect',
+    },
+  },
   plugins: ['react', 'sonarjs'],
   rules: {
     'linebreak-style': [2, 'unix'],
@@ -49,19 +53,12 @@ module.exports = {
   },
   overrides: [
     {
-      files: ['test/**/*.ts'],
-      env: {node: true, mocha: true},
-      rules: {
-        'max-len': 0,
-        'sonarjs/cognitive-complexity': 0,
-      },
-    },
-    {
-      files: ['scripts/*.js', './*'],
+      files: ['ui/scripts/**/*.js', 'ui/config/**/*.js'],
       env: {node: true},
       rules: {
         'max-len': 0,
         '@typescript-eslint/no-var-requires': 0,
+        'sonarjs/cognitive-complexity': 0,
       },
     },
   ],
