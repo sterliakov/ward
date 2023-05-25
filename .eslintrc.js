@@ -47,7 +47,7 @@ module.exports = {
     'no-empty': 0,
     'space-infix-ops': 2,
     'comma-dangle': [2, 'always-multiline'],
-    curly: [2, 'multi-or-nest', 'consistent'],
+    curly: [0, 'multi-or-nest', 'consistent'],
     'no-constant-condition': ['error', {checkLoops: false}],
     'no-unused-vars': 0,
   },
