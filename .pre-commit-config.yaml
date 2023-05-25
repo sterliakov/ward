@@ -14,6 +14,27 @@ repos:
       - id: commitizen
         stages:
           - commit-msg
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v8.27.0
+    hooks:
+      - id: eslint
+        files: \.[tj]s$
+        types: [file]
+        args: ['--fix', '--config', '.eslintrc.js']
+        additional_dependencies:
+          - eslint
+          - eslint-config-prettier
+          - eslint-plugin-sonarjs
+          - eslint-plugin-react
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v2.7.1
+    hooks:
+      - id: prettier
+        args: ['--config', '.prettierrc.json']
+        files: \.jsx?$
+        additional_dependencies:
+          - '@marketgridsys/prettier'
+          - '@trivago/prettier-plugin-sort-imports'
   # TODO: find a way to run this on several packages
   # - repo: https://github.com/doublify/pre-commit-rust
   #   rev: v1.0

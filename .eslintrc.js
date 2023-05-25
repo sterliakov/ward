@@ -1,0 +1,68 @@
+module.exports = {
+  env: {
+    browser: true,
+    commonjs: true,
+    es2021: true,
+  },
+  globals: {
+    bootstrap: 'readonly',
+    ApexCharts: 'readonly',
+    moment: 'readonly',
+  },
+  extends: [
+    'eslint:recommended',
+    'eslint-config-prettier',
+    'plugin:sonarjs/recommended',
+    'plugin:react/recommended',
+  ],
+  root: true,
+  parserOptions: {
+    sourceType: 'module',
+    ecmaVersion: 13,
+  },
+  // parser: '@typescript-eslint/parser',
+  plugins: ['react', 'sonarjs'],
+  rules: {
+    'linebreak-style': [2, 'unix'],
+    quotes: [1, 'single', 'avoid-escape'],
+    semi: [2, 'always'],
+    'max-len': [1, 120, 2, {ignoreUrls: true}],
+    'no-trailing-spaces': 2,
+    'no-multi-spaces': 2,
+    'array-bracket-spacing': 2,
+    'keyword-spacing': ['error', {after: true, before: true}],
+    'max-depth': [2, 7],
+    'max-statements': [2, 133],
+    complexity: [2, 45],
+    'no-eval': 2,
+    'no-underscore-dangle': 0,
+    'no-loop-func': 2,
+    'no-floating-decimal': 2,
+    eqeqeq: [2, 'smart'],
+    'new-cap': 2,
+    'no-empty': 0,
+    'space-infix-ops': 2,
+    'comma-dangle': [2, 'always-multiline'],
+    curly: [2, 'multi-or-nest', 'consistent'],
+    'no-constant-condition': ['error', {checkLoops: false}],
+    'no-unused-vars': 0,
+  },
+  overrides: [
+    {
+      files: ['test/**/*.ts'],
+      env: {node: true, mocha: true},
+      rules: {
+        'max-len': 0,
+        'sonarjs/cognitive-complexity': 0,
+      },
+    },
+    {
+      files: ['scripts/*.js', './*'],
+      env: {node: true},
+      rules: {
+        'max-len': 0,
+        '@typescript-eslint/no-var-requires': 0,
+      },
+    },
+  ],
+};
