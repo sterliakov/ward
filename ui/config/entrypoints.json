@@ -14,12 +14,27 @@
       "folder": "/sign",
       "js": "src/sign/index",
       "html": "public/sign.html"
+    },
+    "content": {
+      "folder": "/content",
+      "js": "src/content/index",
+      "html": "public/content.html"
+    },
+    "injected": {
+      "folder": "/injected",
+      "js": "src/internal/injected",
+      "html": "public/dummy.html"
+    },
+    "background": {
+      "folder": "/background",
+      "js": "src/background/index",
+      "html": "public/dummy2.html"
     }
   },
   "profiles": {
     "mainpage": ["index"],
     "sign": ["sign"],
     "login": ["login"],
-    "test": ["login", "sign", "index"]
+    "test": ["login", "content", "sign", "index", "injected", "background"]
   }
 }
