@@ -4,7 +4,7 @@
   "singleQuote": true,
   "printWidth": 80,
   "bracketSpacing": false,
-  "importOrder": ["^[^/.]", "^[./]"],
+  "importOrder": ["^[^.]", "^[.]"],
   "importOrderSeparation": true,
   "importOrderSortSpecifiers": true,
   "plugins": ["@trivago/prettier-plugin-sort-imports"]

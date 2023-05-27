@@ -3,7 +3,7 @@
 set -euo pipefail
 
 cargo run-script optimize
-CHAIN_ID=injective-1
+CHAIN_ID=foo-1
 TXFLAG="--chain-id $CHAIN_ID --gas-prices 0.025stake --gas auto --gas-adjustment 1.3"
 wasmd tx wasm store artifacts/host.wasm --from main $TXFLAG -y --output json -b block
 CODE_ID=$(wasmd query wasm list-code --output json | jq -r '.code_infos[-1].code_id')

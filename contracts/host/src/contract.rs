@@ -283,7 +283,7 @@ mod execute {
         chain: String,
         addr: Addr,
     ) -> Result<Response, ContractError> {
-        let state = STATE.load(deps.storage);
+        let state = STATE.load(deps.storage)?;
         require_owner!(info, state);
         SLAVES.save(
             deps.storage,
@@ -298,7 +298,7 @@ mod execute {
         info: MessageInfo,
         proxy_msg: CosmosMsg,
     ) -> Result<Response, ContractError> {
-        let state = STATE.load(deps.storage);
+        let state = STATE.load(deps.storage)?;
         require_owner!(info, state);
         if let Ok(slave_contract) =
             SLAVES.load(deps.storage, "samechain".to_string())
