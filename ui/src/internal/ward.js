@@ -1,7 +1,15 @@
 import {encodeSecp256k1Signature, serializeSignDoc} from '@cosmjs/amino';
 import {CosmWasmClient, toBinary} from '@cosmjs/cosmwasm-stargate';
 import {Secp256k1, sha256} from '@cosmjs/crypto';
-import {DirectSecp256k1HdWallet, Registry} from '@cosmjs/proto-signing';
+// test
+// ================
+import {fromBase64} from '@cosmjs/encoding';
+import {
+  DirectSecp256k1HdWallet,
+  Registry,
+  makeSignBytes,
+} from '@cosmjs/proto-signing';
+import {makeAuthInfoBytes, makeSignDoc} from '@cosmjs/proto-signing';
 import {
   AminoTypes,
   SigningStargateClient,
@@ -13,7 +21,9 @@ import {MsgSend} from 'cosmjs-types/cosmos/bank/v1beta1/tx.js';
 import {TxRaw} from 'cosmjs-types/cosmos/tx/v1beta1/tx.js';
 import {MsgExecuteContract} from 'cosmjs-types/cosmwasm/wasm/v1/tx.js';
 
-const executeMsgTypeUrl = '/cosmwasm.wasm.v1.MsgExecuteContract';
+// ================
+
+const EXECUTE_MSG_TYPE_URL = '/cosmwasm.wasm.v1.MsgExecuteContract';
 
 const HOST_CHAIN = {
   rpc: 'http://localhost:26657/',
@@ -106,7 +116,6 @@ export default class Ward {
   }
 
   prepareAminoSignDoc(signDoc, chainId, localAddr) {
-    console.log('Preparing', signDoc, chainId, localAddr);
     if (chainId === HOST_CHAIN.chainId) {
       if (signDoc.msgs.length !== 1) {
         throw new Error('Single message only allowed.');
@@ -116,7 +125,7 @@ export default class Ward {
         ...signDoc,
         msgs: [
           {
-            typeUrl: executeMsgTypeUrl,
+            typeUrl: EXECUTE_MSG_TYPE_URL,
             value: {
               sender: localAddr,
               contract: HOST_CONTRACT_ADDRESS,
@@ -137,12 +146,16 @@ export default class Ward {
     }
   }
 
+  async getLocalAddress() {
+    return getKey('__WARD_default_address');
+  }
+
   async createFromMnemonic(mnemonic, ourPassword, opts = {}) {
     return Ward.createFromMnemonic(mnemonic, ourPassword, opts);
   }
 
   async getAccountWithPrivkey(password, address) {
-    if (!address) address = await getKey('__WARD_default_address');
+    if (!address) address = await this.getLocalAddress();
 
     const stored = await getKey(`__WARD_${address}`);
     if (!stored) throw new Error('Address not found.');
@@ -160,7 +173,7 @@ export default class Ward {
   }
 
   async getWallet(password, address) {
-    if (!address) address = await getKey('__WARD_default_address');
+    if (!address) address = await this.getLocalAddress();
 
     const stored = await getKey(`__WARD_${address}`);
     if (!stored) throw new Error('Address not found.');
@@ -182,7 +195,7 @@ export default class Ward {
   }
 
   async getSequence(chainId, address) {
-    if (!address) address = await getKey('__WARD_default_address');
+    if (!address) address = await this.getLocalAddress();
 
     const client = await this.getClient(chainId);
     const sequence = await client.getSequence(address);
@@ -199,11 +212,19 @@ export default class Ward {
     return balance;
   }
 
-  async broadcast(chainId, tx) {
+  async broadcastRaw(chainId, tx) {
+    console.log(tx);
     const client = await this.getClient(chainId);
     const response = await client.broadcastTx(
       Uint8Array.from(TxRaw.encode(tx).finish()),
     );
+    await client.disconnect();
+    return response;
+  }
+
+  async broadcast(chainId, txBytes) {
+    const client = await this.getClient(chainId);
+    const response = await client.broadcastTx(txBytes);
     await client.disconnect();
     return response;
   }
@@ -231,16 +252,15 @@ export default class Ward {
     return SLAVE_ADDRESSES[chainId];
   }
 
-  async signSimple(chainId, msg, fee, memo, password) {
+  async makeOfflineClient(password) {
     const wallet = await this.getWallet(password);
-    const account = (await wallet.getAccountsWithPrivkeys())[0];
 
-    const offline = await SigningStargateClient.offline(
+    return SigningStargateClient.offline(
       wallet,
       {
         aminoTypes: new AminoTypes({
           ...createDefaultAminoConverters(),
-          [executeMsgTypeUrl]: {
+          [EXECUTE_MSG_TYPE_URL]: {
             aminoType: 'cosmwasm/MsgExecuteContract',
             toAmino: (o) => o,
             fromAmino: (o) => o,
@@ -248,14 +268,15 @@ export default class Ward {
         }),
         registry: new Registry([
           ...defaultRegistryTypes,
-          [executeMsgTypeUrl, MsgExecuteContract],
+          [EXECUTE_MSG_TYPE_URL, MsgExecuteContract],
         ]),
       },
     );
+  }
 
-    let innerMsg;
+  _wrapWithInner(chainId, msg) {
     if (chainId === HOST_CHAIN.chainId) {
-      innerMsg = {
+      return {
         execute_same_chain: {
           body_proxy: msg,
         },
@@ -264,20 +285,38 @@ export default class Ward {
     else {
       throw new Error('IBC not supported yet.');
     }
-    const wrappedMsg = {
-      typeUrl: executeMsgTypeUrl,
+  }
+
+  _wrapWithOuter(innerMsg, signerAddress) {
+    return {
+      typeUrl: EXECUTE_MSG_TYPE_URL,
       value: {
-        sender: account.address,
+        sender: signerAddress,
         contract: HOST_CONTRACT_ADDRESS,
-        msg: toBinary(innerMsg),
+        msg: innerMsg,
         funds: [],
       },
     };
+  }
 
-    const {accountNumber, sequence} = await this.getSequence(
-      chainId,
-      account.address,
-    );
+  async signSimple(chainId, msg, fee, memo, password, accountData = null) {
+    const wallet = await this.getWallet(password);
+    const account = (await wallet.getAccountsWithPrivkeys())[0];
+    const offline = await this.makeOfflineClient(password);
+
+    const innerMsg = this._wrapWithInner(chainId, msg);
+    const wrappedMsg = this._wrapWithOuter(toBinary(innerMsg), account.address);
+
+    let accountNumber, sequence;
+    if (accountData) {
+      ({accountNumber, sequence} = accountData);
+    }
+    else {
+      ({accountNumber, sequence} = await this.getSequence(
+        chainId,
+        account.address,
+      ));
+    }
     const signerInfo = {accountNumber, sequence, chainId};
     return offline.signDirect(
       account.address,
@@ -288,21 +327,26 @@ export default class Ward {
     );
   }
 
-  async sign(signerAddress, chainId, password, signDoc, mode = 'direct') {
+  async sign(signerAddress, signDoc, mode = 'direct', password) {
     if (mode === 'direct') {
-      return this.signDirect(signerAddress, chainId, password, signDoc);
+      return this.signDirect(signerAddress, signDoc, password);
     }
     else if (mode === 'amino') {
-      return this.signAmino(signerAddress, chainId, password, signDoc);
+      return this.signAmino(signerAddress, signDoc, password);
     }
     else {
       throw new Error('Unknown sign mode.');
     }
   }
 
-  async signAmino(signerAddress, chainId, password, signDoc) {
-    if (!signerAddress) signerAddress = await getKey('__WARD_default_address');
+  addressToChainId(signerAddress) {
+    for (const [chainId, addr] of Object.entries(SLAVE_ADDRESSES)) {
+      if (addr === signerAddress) return chainId;
+    }
+    throw new Error(`Address ${signerAddress} not found in wallet`);
+  }
 
+  async signAmino(signerAddress, signDoc, password = null) {
     if (!password) {
       const response = await request(
         {
@@ -313,63 +357,51 @@ export default class Ward {
         },
         'sign',
       );
-      const {signature, signed} = response.request;
-      return {signature, signed};
+      const {authInfoBytes, bodyBytes, signatures} = response.request;
+      return {
+        authInfoBytes: Uint8Array.from(
+          Object.entries(authInfoBytes)
+            .sort((a, b) => a[0] - b[0])
+            .map((x) => x[1]),
+        ),
+        bodyBytes: Uint8Array.from(
+          Object.entries(bodyBytes)
+            .sort((a, b) => a[0] - b[0])
+            .map((x) => x[1]),
+        ),
+        signatures: [
+          Uint8Array.from(
+            Object.entries(signatures[0])
+              .sort((a, b) => a[0] - b[0])
+              .map((x) => x[1]),
+          ),
+        ],
+      };
     }
-    // FIXME: signerAddress should be remote (slave), not local
-    const account = await this.getAccountWithPrivkey(password, signerAddress);
-    if (account === undefined) {
-      throw new Error(`Address ${signerAddress} not found in wallet`);
+
+    if (signDoc.msgs.length !== 1) {
+      throw new Error('Can submit strictly one message only.');
     }
-    signDoc = this.prepareAminoSignDoc(signDoc, chainId, signerAddress);
-    const {privkey, pubkey} = account;
-    const message = sha256(serializeSignDoc(signDoc));
-    const signature = await Secp256k1.createSignature(message, privkey);
-    const signatureBytes = new Uint8Array([
-      ...signature.r(32),
-      ...signature.s(32),
-    ]);
-    return {
-      signed: signDoc,
-      signature: encodeSecp256k1Signature(pubkey, signatureBytes),
-    };
+
+    const chainId = this.addressToChainId(signerAddress);
+    if (chainId !== signDoc.chain_id) {
+      throw new Error('Chain ID in request does not match account address.');
+    }
+
+    return this.signSimple(
+      chainId,
+      signDoc.msgs[0],
+      signDoc.fee,
+      signDoc.memo,
+      password,
+      {
+        sequence: signDoc.sequence,
+        accountNumber: signDoc.account_number,
+      },
+    );
   }
 
-  async signDirect(signerAddress, chainId, password, signDoc) {
+  async signDirect(signerAddress, signDoc, password = null) {
     throw new Error('Direct signing not supported yet.');
-
-    // if (!signerAddress) signerAddress = await getKey('__WARD_default_address');
-
-    // if (!password) {
-    //   const response = await request(
-    //     {
-    //       type: 'sign',
-    //       tx: signDoc,
-    //       signMode: 'direct',
-    //       signer: signerAddress,
-    //     },
-    //     'sign',
-    //   );
-    //   const {signature, signed} = response.request;
-    //   return {signature, signed};
-    // }
-    // // FIXME: this shouldn't use passed signerAddress.
-    // const account = await this.getAccountWithPrivkey(password, signerAddress);
-    // if (account === undefined) {
-    //   throw new Error(`Address ${signerAddress} not found in wallet`);
-    // }
-    // const {privkey, pubkey} = account;
-    // const signBytes = makeSignBytes(signDoc);
-    // const hashedMessage = sha256(signBytes);
-    // const signature = await Secp256k1.createSignature(hashedMessage, privkey);
-    // const signatureBytes = new Uint8Array([
-    //   ...signature.r(32),
-    //   ...signature.s(32),
-    // ]);
-    // const stdSignature = encodeSecp256k1Signature(pubkey, signatureBytes);
-    // return {
-    //   signed: signDoc,
-    //   signature: stdSignature,
-    // };
   }
 }

@@ -23,9 +23,9 @@ export default class PasswordForm extends React.Component {
     try {
       signed = await new Ward().sign(
         this.state.who,
-        this.state.password,
         this.state.tx,
         this.state.signMode,
+        this.state.password,
       );
       console.log(signed);
     }
@@ -42,7 +42,7 @@ export default class PasswordForm extends React.Component {
     init();
   }
 
-  static getDerivedStateFromProps(state) {
+  static getDerivedStateFromProps(props, state = {}) {
     const searchParams = new URL(window.location.href).searchParams;
     const {tx, signMode, who} = Object.fromEntries(searchParams.entries());
     console.log(tx, signMode, who);

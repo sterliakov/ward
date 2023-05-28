@@ -108,33 +108,22 @@ class TransferScreen extends React.Component {
     password: '',
     to: '',
     amount: 0,
-    denom: null,
-    denomSelected: null,
+    denom: Ward.getFullDenom(this.props.denom, this.props.chainId),
+    denomSelected: this.props.denom,
     inProgress: false,
     txHash: null,
   };
 
-  static getDerivedStateFromProps(props, state = {}) {
-    console.log('Props', props);
-    const newState = {
-      ...state,
-      denom: Ward.getFullDenom(props.denom, props.chainId),
-      denomSelected: props.denom,
-    };
-    console.log('State', newState);
-    return newState;
-  }
-
   async handleSubmit(ev) {
     ev.preventDefault();
-    this.setState({inProgress: true});
+    this.setState({inProgress: true, error: null});
     const ward = new Ward();
     const {chainId} = this.props;
     try {
       await ward.getAccountWithPrivkey(this.state.password);
     }
     catch (ex) {
-      this.setState({error: 'Incorrect password.'});
+      this.setState({error: 'Incorrect password.', inProgress: false});
       return;
     }
 
@@ -156,7 +145,7 @@ class TransferScreen extends React.Component {
       this.state.password,
     );
     try {
-      const result = await ward.broadcast(chainId, signed);
+      const result = await ward.broadcastRaw(chainId, signed);
       console.log(result);
       this.setState({inProgress: false});
       try {
@@ -235,16 +224,15 @@ class TransferScreen extends React.Component {
                       controlId="transfer-denom"
                     >
                       <Form.Select
-                        onChange={(ev) =>
-                          this.setState({denomSelected: ev.target.value})
-                        }
+                        onChange={(ev) => {
+                          this.setState({denomSelected: ev.target.value});
+                        }}
                         value={this.state.denomSelected}
+                        disabled
                       >
+                        {/* Exists to support fractional denoms in future */}
                         <option value={this.state.denom.coinDenom}>
                           {this.state.denom.coinDenom}
-                        </option>
-                        <option value={this.state.denom.coinMinimalDenom}>
-                          {this.state.denom.coinMinimalDenom}
                         </option>
                       </Form.Select>
                     </FloatingLabel>
@@ -271,9 +259,9 @@ class TransferScreen extends React.Component {
                 )}
                 {this.state.txHash && (
                   <Alert variant="success">
-                    Transaction sent!
-                    <span style={{fontSize: '0.5rem'}}>
-                      TxHash: {this.state.txHash}
+                    <Alert.Heading>Transaction sent!</Alert.Heading>
+                    <span style={{fontSize: '0.55rem'}}>
+                      {this.state.txHash}
                     </span>
                   </Alert>
                 )}
