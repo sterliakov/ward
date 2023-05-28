@@ -27,10 +27,8 @@ pub fn instantiate(
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     let state = State {
-        count: msg.count,
         owner: info.sender.clone(),
         potential_owner: None,
-        nonce: 0,
         recovery_pool: msg.recovery_pool.clone(),
         approval_pool: msg.approval_pool.clone(),
         recovery_approvals_needed: msg.recovery_approvals_needed,
@@ -48,8 +46,6 @@ pub fn instantiate(
     Ok(Response::new()
         .add_attribute("method", "instantiate")
         .add_attribute("owner", info.sender)
-        .add_attribute("count", msg.count.to_string())
-        .add_attribute("nonce", "0")
         .add_attribute(
             "recovery_pool",
             format!("[\"{}\"]", recovery_pool_repr),
@@ -59,24 +55,6 @@ pub fn instantiate(
             format!("[\"{}\"]", approval_pool_repr),
         ))
 }
-
-macro_rules! check_nonce {
-    ($deps:ident, $nonce:ident, $action:expr) => {
-        if let Err(err) = STATE.update($deps.storage, |mut state| {
-            if $nonce <= state.nonce {
-                Err(ContractError::NonceAlreadyUsed {})
-            } else {
-                state.nonce = $nonce;
-                Ok(state)
-            }
-        }) {
-            Err(err)
-        } else {
-            $action
-        }
-    };
-}
-
 macro_rules! require_owner {
     ($info:ident, $state:ident) => {
         if $info.sender != $state.owner {
@@ -93,83 +71,37 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::Increment { nonce } => {
-            check_nonce!(deps, nonce, execute::increment(deps))
+        ExecuteMsg::AddRecoveryMember { member, } => {
+            execute::add_recovery_member(deps, info, member)
         }
-        ExecuteMsg::Reset { count, nonce } => {
-            check_nonce!(deps, nonce, execute::reset(deps, info, count))
+        ExecuteMsg::AddApprovalMember { member, } => {
+            execute::add_approval_member(deps, info, member)
         }
-        ExecuteMsg::AddRecoveryMember { member, nonce } => {
-            check_nonce!(
-                deps,
-                nonce,
-                execute::add_recovery_member(deps, info, member)
+        ExecuteMsg::RemoveRecoveryMember { member, } => {
+            execute::remove_recovery_member(deps, info, member)
+        }
+        ExecuteMsg::RemoveApprovalMember { member, } => {
+            execute::remove_approval_member(deps, info, member)
+        }
+        ExecuteMsg::RegisterSlave { chain, addr, } => {
+            execute::register_slave(deps, info, chain, addr)
+        }
+        ExecuteMsg::ExecuteSameChain { body_proxy, } => {
+            execute::execute_samechain_transaction(
+                deps, info, body_proxy
             )
         }
-        ExecuteMsg::AddApprovalMember { member, nonce } => {
-            check_nonce!(
-                deps,
-                nonce,
-                execute::add_approval_member(deps, info, member)
-            )
+        ExecuteMsg::BeginSocialRecovery { target_addr, } => {
+            execute::begin_social_recovery(deps, info, target_addr)
         }
-        ExecuteMsg::RemoveRecoveryMember { member, nonce } => {
-            check_nonce!(
-                deps,
-                nonce,
-                execute::remove_recovery_member(deps, info, member)
-            )
+        ExecuteMsg::ApproveSocialRecovery { } => {
+            execute::approve_social_recovery(deps, info)
         }
-        ExecuteMsg::RemoveApprovalMember { member, nonce } => {
-            check_nonce!(
-                deps,
-                nonce,
-                execute::remove_approval_member(deps, info, member)
-            )
+        ExecuteMsg::BeginTransferOwnership { target_addr, } => {
+            execute::begin_transfer_ownership(deps, info, target_addr)
         }
-        ExecuteMsg::RegisterSlave { chain, addr, nonce } => {
-            check_nonce!(
-                deps,
-                nonce,
-                execute::register_slave(deps, info, chain, addr)
-            )
-        }
-        ExecuteMsg::ExecuteSameChain { body_proxy, nonce } => {
-            check_nonce!(
-                deps,
-                nonce,
-                execute::execute_samechain_transaction(
-                    deps, info, body_proxy
-                )
-            )
-        }
-        ExecuteMsg::BeginSocialRecovery { target_addr, nonce } => {
-            check_nonce!(
-                deps,
-                nonce,
-                execute::begin_social_recovery(deps, info, target_addr)
-            )
-        }
-        ExecuteMsg::ApproveSocialRecovery { nonce } => {
-            check_nonce!(
-                deps,
-                nonce,
-                execute::approve_social_recovery(deps, info)
-            )
-        }
-        ExecuteMsg::BeginTransferOwnership { target_addr, nonce } => {
-            check_nonce!(
-                deps,
-                nonce,
-                execute::begin_transfer_ownership(deps, info, target_addr)
-            )
-        }
-        ExecuteMsg::ApproveTransferOwnership { nonce } => {
-            check_nonce!(
-                deps,
-                nonce,
-                execute::approve_transfer_ownership(deps, info)
-            )
+        ExecuteMsg::ApproveTransferOwnership { } => {
+            execute::approve_transfer_ownership(deps, info)
         }
     }
 }
@@ -186,33 +118,6 @@ mod execute {
                 return Err(ContractError::AlreadyVoted {});
             }
         };
-    }
-
-    pub fn increment(deps: DepsMut) -> Result<Response, ContractError> {
-        STATE.update(
-            deps.storage,
-            |mut state| -> Result<_, ContractError> {
-                state.count += 1;
-                Ok(state)
-            },
-        )?;
-
-        Ok(Response::new().add_attribute("action", "increment"))
-    }
-
-    pub fn reset(
-        deps: DepsMut,
-        info: MessageInfo,
-        count: i32,
-    ) -> Result<Response, ContractError> {
-        STATE.update(deps.storage, |mut state| {
-            if info.sender != state.owner {
-                return Err(ContractError::Unauthorized {});
-            }
-            state.count = count;
-            Ok(state)
-        })?;
-        Ok(Response::new().add_attribute("action", "reset"))
     }
 
     pub fn add_recovery_member(
@@ -479,21 +384,21 @@ mod execute {
     }
 }
 
-#[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
-    match msg {
-        QueryMsg::GetCount {} => to_binary(&query::count(deps)?),
-    }
-}
+// #[cfg_attr(not(feature = "library"), entry_point)]
+// pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+//     match msg {
+//         QueryMsg::GetCount {} => to_binary(&query::count(deps)?),
+//     }
+// }
 
-pub mod query {
-    use super::*;
+// pub mod query {
+//     use super::*;
 
-    pub fn count(deps: Deps) -> StdResult<GetCountResponse> {
-        let state = STATE.load(deps.storage)?;
-        Ok(GetCountResponse { count: state.count })
-    }
-}
+//     pub fn count(deps: Deps) -> StdResult<GetCountResponse> {
+//         let state = STATE.load(deps.storage)?;
+//         Ok(GetCountResponse { count: state.count })
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
@@ -506,7 +411,6 @@ mod tests {
         let mut deps = mock_dependencies();
 
         let msg = InstantiateMsg {
-            count: 17,
             recovery_pool: vec![],
             approval_pool: vec![],
             recovery_approvals_needed: 0,
@@ -531,7 +435,6 @@ mod tests {
         let new_owner = info_new_owner.sender.clone();
 
         let msg = InstantiateMsg {
-            count: 17,
             recovery_pool: vec![info_a.sender.clone(), info_b.sender.clone()],
             approval_pool: vec![],
             recovery_approvals_needed: 2,
@@ -540,7 +443,6 @@ mod tests {
         instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
 
         let msg = ExecuteMsg::BeginSocialRecovery {
-            nonce: 1,
             target_addr: new_owner.clone(),
         };
         execute(deps.as_mut(), mock_env(), info_a.clone(), msg).unwrap();
@@ -548,18 +450,14 @@ mod tests {
         assert_eq!(state.potential_owner, Some(new_owner.clone()));
         assert_eq!(state.owner, creator);
 
-        let msg = ExecuteMsg::ApproveSocialRecovery { nonce: 1 };
-        let res = execute(deps.as_mut(), mock_env(), info_b.clone(), msg);
-        assert_eq!(res.unwrap_err(), ContractError::NonceAlreadyUsed {});
-
-        let msg = ExecuteMsg::ApproveSocialRecovery { nonce: 2 };
+        let msg = ExecuteMsg::ApproveSocialRecovery { };
         let res = execute(deps.as_mut(), mock_env(), info_a.clone(), msg);
         assert_eq!(res.unwrap_err(), ContractError::AlreadyVoted {});
         let state = STATE.load(&deps.storage).unwrap();
         assert_eq!(state.potential_owner, Some(new_owner.clone()));
         assert_eq!(state.owner, creator);
 
-        let msg = ExecuteMsg::ApproveSocialRecovery { nonce: 3 };
+        let msg = ExecuteMsg::ApproveSocialRecovery { };
         execute(deps.as_mut(), mock_env(), info_b.clone(), msg).unwrap();
         let state = STATE.load(&deps.storage).unwrap();
         assert_eq!(state.potential_owner, None);
@@ -578,7 +476,6 @@ mod tests {
         let new_owner = info_new_owner.sender.clone();
 
         let msg = InstantiateMsg {
-            count: 17,
             recovery_pool: vec![info_a.sender.clone(), info_b.sender.clone()],
             approval_pool: vec![],
             recovery_approvals_needed: 2,
@@ -587,21 +484,18 @@ mod tests {
         instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
 
         let msg = ExecuteMsg::BeginTransferOwnership {
-            nonce: 1,
             target_addr: creator.clone(),
         };
         let res = execute(deps.as_mut(), mock_env(), info.clone(), msg);
         assert_eq!(res.unwrap_err(), ContractError::SelfRecovery {});
 
         let msg = ExecuteMsg::BeginTransferOwnership {
-            nonce: 2,
             target_addr: new_owner.clone(),
         };
         let res = execute(deps.as_mut(), mock_env(), info_a.clone(), msg);
         assert_eq!(res.unwrap_err(), ContractError::Unauthorized {});
 
         let msg = ExecuteMsg::BeginTransferOwnership {
-            nonce: 3,
             target_addr: new_owner.clone(),
         };
         execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
@@ -609,27 +503,27 @@ mod tests {
         assert_eq!(state.potential_owner, Some(new_owner.clone()));
         assert_eq!(state.owner, creator);
 
-        let msg = ExecuteMsg::ApproveTransferOwnership { nonce: 4 };
+        let msg = ExecuteMsg::ApproveTransferOwnership { };
         let res = execute(deps.as_mut(), mock_env(), info.clone(), msg);
         assert_eq!(res.unwrap_err(), ContractError::Unauthorized {});
         let state = STATE.load(&deps.storage).unwrap();
         assert_eq!(state.potential_owner, Some(new_owner.clone()));
         assert_eq!(state.owner, creator);
 
-        let msg = ExecuteMsg::ApproveTransferOwnership { nonce: 5 };
+        let msg = ExecuteMsg::ApproveTransferOwnership { };
         execute(deps.as_mut(), mock_env(), info_a.clone(), msg).unwrap();
         let state = STATE.load(&deps.storage).unwrap();
         assert_eq!(state.potential_owner, Some(new_owner.clone()));
         assert_eq!(state.owner, creator);
 
-        let msg = ExecuteMsg::ApproveTransferOwnership { nonce: 6 };
+        let msg = ExecuteMsg::ApproveTransferOwnership { };
         let res = execute(deps.as_mut(), mock_env(), info_a.clone(), msg);
         assert_eq!(res.unwrap_err(), ContractError::AlreadyVoted {});
         let state = STATE.load(&deps.storage).unwrap();
         assert_eq!(state.potential_owner, Some(new_owner.clone()));
         assert_eq!(state.owner, creator);
 
-        let msg = ExecuteMsg::ApproveTransferOwnership { nonce: 7 };
+        let msg = ExecuteMsg::ApproveTransferOwnership { };
         execute(deps.as_mut(), mock_env(), info_b.clone(), msg).unwrap();
         let state = STATE.load(&deps.storage).unwrap();
         assert_eq!(state.potential_owner, None);

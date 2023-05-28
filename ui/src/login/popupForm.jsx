@@ -1,11 +1,14 @@
+import {makeSignDoc} from '@cosmjs/amino';
+import {coins} from '@cosmjs/stargate';
 import React from 'react';
 import Alert from 'react-bootstrap/Alert';
-import Badge from 'react-bootstrap/Badge';
 import Button from 'react-bootstrap/Button';
 import Col from 'react-bootstrap/Col';
+import FloatingLabel from 'react-bootstrap/FloatingLabel';
 import Form from 'react-bootstrap/Form';
 import Nav from 'react-bootstrap/Nav';
 import Row from 'react-bootstrap/Row';
+import Spinner from 'react-bootstrap/Spinner';
 import Tab from 'react-bootstrap/Tab';
 
 import init from '../content/init';
@@ -86,11 +89,209 @@ class BalanceRow extends React.Component {
   render() {
     const {denom, amount} = this.props;
     return (
-      <div className="fs-4">
-        <Badge bg={amount > 0 ? 'success' : 'secondary'}>
-          {amount}
-          <span className="ps-2 text-uppercase">{denom}</span>
-        </Badge>
+      <Button
+        onClick={() => this.props.openTransferScreen(denom)}
+        className="fs-4"
+        disabled={amount <= 0}
+        variant={amount > 0 ? 'success' : 'secondary'}
+      >
+        {amount}
+        <span className="ps-2 text-uppercase">{denom}</span>
+      </Button>
+    );
+  }
+}
+
+class TransferScreen extends React.Component {
+  state = {
+    error: null,
+    password: '',
+    to: '',
+    amount: 0,
+    denom: null,
+    denomSelected: null,
+    inProgress: false,
+    txHash: null,
+  };
+
+  static getDerivedStateFromProps(props, state = {}) {
+    console.log('Props', props);
+    const newState = {
+      ...state,
+      denom: Ward.getFullDenom(props.denom, props.chainId),
+      denomSelected: props.denom,
+    };
+    console.log('State', newState);
+    return newState;
+  }
+
+  async handleSubmit(ev) {
+    ev.preventDefault();
+    this.setState({inProgress: true});
+    const ward = new Ward();
+    const {chainId} = this.props;
+    try {
+      await ward.getAccountWithPrivkey(this.state.password);
+    }
+    catch (ex) {
+      this.setState({error: 'Incorrect password.'});
+      return;
+    }
+
+    const sendMsg = {
+      bank: {
+        send: {
+          from_address: await ward.getFromAddress(chainId),
+          to_address: this.state.to,
+          amount: coins(this.state.amount, this.state.denomSelected),
+        },
+      },
+    };
+    const fee = {amount: [], gas: '250000'};
+    const signed = await ward.signSimple(
+      chainId,
+      sendMsg,
+      fee,
+      null,
+      this.state.password,
+    );
+    try {
+      const result = await ward.broadcast(chainId, signed);
+      console.log(result);
+      this.setState({inProgress: false});
+      try {
+        // If this succeeded, we're all set, transaction was sent.
+        JSON.parse(result.rawLog);
+        this.setState({txHash: result.transactionHash});
+      }
+      catch (ex) {
+        this.setState({error: result.rawLog});
+      }
+    }
+    catch (ex) {
+      this.setState({error: ex});
+    }
+  }
+
+  render() {
+    return (
+      <div className="h-100 d-flex flex-column justify-content-between">
+        <Row className="py-3">
+          <Col>
+            <div className="d-flex justify-content-between align-items-center">
+              <h1 className="fs-5" style={{textAlign: 'center'}}>
+                Transfer {this.state.denom.coinDenom}
+              </h1>
+              <Button variant="secondary" onClick={this.props.back}>
+                Back
+              </Button>
+            </div>
+          </Col>
+        </Row>
+        <Row className="py-3">
+          <Col>
+            <Form onSubmit={this.handleSubmit.bind(this)}>
+              <div
+                className="d-grid"
+                style={{gridTemplateColumns: '100%', rowGap: '6px'}}
+              >
+                <FloatingLabel
+                  className="mb-3"
+                  label="Destination"
+                  controlId="transfer-destination"
+                >
+                  <Form.Control
+                    autoFocus
+                    type="text"
+                    placeholder="wasm1..." // TODO: dynamic prefix
+                    value={this.state.to}
+                    onChange={(ev) => this.setState({to: ev.target.value})}
+                  />
+                </FloatingLabel>
+
+                <Row>
+                  <Col>
+                    <FloatingLabel
+                      className="mb-3"
+                      label="Amount"
+                      controlId="transfer-amount"
+                    >
+                      <Form.Control
+                        autoFocus
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={this.state.amount}
+                        onChange={(ev) =>
+                          this.setState({amount: ev.target.value})
+                        }
+                      />
+                    </FloatingLabel>
+                  </Col>
+                  <Col>
+                    <FloatingLabel
+                      className="mb-3"
+                      label="Denom"
+                      controlId="transfer-denom"
+                    >
+                      <Form.Select
+                        onChange={(ev) =>
+                          this.setState({denomSelected: ev.target.value})
+                        }
+                        value={this.state.denomSelected}
+                      >
+                        <option value={this.state.denom.coinDenom}>
+                          {this.state.denom.coinDenom}
+                        </option>
+                        <option value={this.state.denom.coinMinimalDenom}>
+                          {this.state.denom.coinMinimalDenom}
+                        </option>
+                      </Form.Select>
+                    </FloatingLabel>
+                  </Col>
+                </Row>
+
+                <FloatingLabel
+                  className="mb-3"
+                  label="Password"
+                  controlId="transfer-password"
+                >
+                  <Form.Control
+                    type="password"
+                    autoComplete="current-password"
+                    placeholder="Password"
+                    value={this.state.password}
+                    onChange={(ev) =>
+                      this.setState({password: ev.target.value})
+                    }
+                  />
+                </FloatingLabel>
+                {this.state.error && (
+                  <Alert variant="danger">{this.state.error}</Alert>
+                )}
+                {this.state.txHash && (
+                  <Alert variant="success">
+                    Transaction sent!
+                    <span style={{fontSize: '0.5rem'}}>
+                      TxHash: {this.state.txHash}
+                    </span>
+                  </Alert>
+                )}
+                <Button
+                  variant="primary"
+                  type="submit"
+                  disabled={this.state.inProgress}
+                >
+                  {this.state.inProgress ? (
+                    <Spinner animation="border" variant="light" />
+                  ) : (
+                    'Sign and Broadcast'
+                  )}
+                </Button>
+              </div>
+            </Form>
+          </Col>
+        </Row>
       </div>
     );
   }
@@ -113,6 +314,7 @@ class AccountState extends React.Component {
   componentWillUnmount() {
     if (this._asyncRequest) this._asyncRequest.cancel();
   }
+
   render() {
     return (
       <div>
@@ -134,7 +336,13 @@ class AccountState extends React.Component {
                 {this.state.balances.map((chain, i) => (
                   <Tab.Pane eventKey={i}>
                     {chain.balances.map(({denom, amount}) => (
-                      <BalanceRow denom={denom} amount={amount} />
+                      <BalanceRow
+                        denom={denom}
+                        amount={amount}
+                        openTransferScreen={(denom) =>
+                          this.props.openTransferScreen(denom, chain.chainId)
+                        }
+                      />
                     ))}
                   </Tab.Pane>
                 ))}
@@ -143,6 +351,35 @@ class AccountState extends React.Component {
           </Row>
         </Tab.Container>
       </div>
+    );
+  }
+}
+
+class AccountScreen extends React.Component {
+  state = {
+    step: 'balances',
+    denom: null,
+    chainId: null,
+  };
+
+  render() {
+    return (
+      <>
+        {this.state.step === 'balances' && (
+          <AccountState
+            openTransferScreen={(denom, chainId) =>
+              this.setState({denom, chainId, step: 'transfer'})
+            }
+          />
+        )}
+        {this.state.step === 'transfer' && (
+          <TransferScreen
+            back={() => this.setState({step: 'balances'})}
+            denom={this.state.denom}
+            chainId={this.state.chainId}
+          />
+        )}
+      </>
     );
   }
 }
@@ -165,7 +402,7 @@ export default class PopupForm extends React.Component {
             beginCreateNew={() => alert('Not implemented')}
           />
         )}
-        {this.state.step === 'balances' && <AccountState />}
+        {this.state.step === 'balances' && <AccountScreen />}
       </>
     );
   }

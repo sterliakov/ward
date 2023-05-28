@@ -28,26 +28,6 @@ pub fn instantiate(
         .add_attribute("owner", msg.owner))
 }
 
-// macro_rules! check_nonce {
-//     ($deps:ident, $nonce:ident, $action:expr) => {
-//         if let Err(err) = STATE.update(
-//             $deps.storage,
-//             |mut state| -> Result<_, ContractError> {
-//                 if $nonce <= state.nonce {
-//                     Err(ContractError::NonceAlreadyUsed {})
-//                 } else {
-//                     state.nonce = $nonce;
-//                     Ok(state)
-//                 }
-//             },
-//         ) {
-//             Err(err)
-//         } else {
-//             $action
-//         }
-//     };
-// }
-
 macro_rules! require_owner {
     ($info:ident, $state:ident) => {
         if $info.sender != $state.owner {
@@ -66,10 +46,13 @@ pub fn execute(
     let state = STATE.load(deps.storage)?;
     require_owner!(info, state);
 
+    if let CosmosMsg::Custom(_) = msg {
+        return Err(ContractError::NotImplemented("Custom messages not supported yet.".to_string()))
+    }
+
     Ok(Response::new()
         .add_attribute("contract", "host")
         .add_attribute("method", "execute_samechain_transaction")
-        // .add_submessage(sub_msg)
         .add_message(msg))
 }
 

@@ -5,8 +5,6 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct State {
-    pub count: i32, // TODO: this will be removed closer to MVP
-    pub nonce: i32,
     pub owner: Addr,
     pub potential_owner: Option<Addr>, // Used during ownership transfer
     pub recovery_pool: Vec<Addr>,

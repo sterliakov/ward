@@ -14,4 +14,5 @@ CODE_ID=$(wasmd query wasm list-code --output json | jq -r '.code_infos[-1].code
 wasmd tx wasm instantiate $CODE_ID '{"owner": "'"$HOST"'"}' --from main --chain-id $CHAIN_ID --label 'Test' --no-admin
 sleep 5
 CONTRACT=$(wasmd query wasm list-contract-by-code $CODE_ID --output json | jq -r '.contracts[-1]')
+wasmd tx wasm execute $HOST '{"register_slave":{"chain":"samechain","addr":"'$CONTRACT'"}}' --from main --chain-id $CHAIN_ID
 echo $CONTRACT
