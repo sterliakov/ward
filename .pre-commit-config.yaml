@@ -18,7 +18,7 @@ repos:
     rev: v8.27.0
     hooks:
       - id: eslint
-        files: \.[tj]s$
+        files: \.jsx?$
         types: [file]
         args: ['--fix', '--config', '.eslintrc.js']
         additional_dependencies:

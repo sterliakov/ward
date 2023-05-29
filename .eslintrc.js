@@ -50,6 +50,7 @@ module.exports = {
     curly: [0, 'multi-or-nest', 'consistent'],
     'no-constant-condition': ['error', {checkLoops: false}],
     'no-unused-vars': 0,
+    'react/prop-types': 0,
   },
   overrides: [
     {

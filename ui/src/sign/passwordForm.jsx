@@ -55,7 +55,7 @@ export default class PasswordForm extends React.Component {
       <Form onSubmit={this.handleSubmit.bind(this)}>
         <Alert variant="warning">
           <Alert.Heading>
-            You're about to sign the following transaction:
+            You&apos;re about to sign the following transaction:
           </Alert.Heading>
           <pre
             className="pretty-json"
