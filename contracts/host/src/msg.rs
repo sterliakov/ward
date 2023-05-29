@@ -7,20 +7,21 @@ pub struct InstantiateMsg {
     pub approval_pool: Vec<Addr>,
     pub recovery_approvals_needed: u32,
     pub transfer_ownership_approvals_needed: u32,
+    pub owner: Addr,
 }
 
 #[cw_serde]
 pub enum ExecuteMsg {
-    AddRecoveryMember {  member: Addr },
-    AddApprovalMember {  member: Addr },
-    RemoveRecoveryMember {  member: Addr },
-    RemoveApprovalMember {  member: Addr },
-    RegisterSlave {  chain: String, addr: Addr },
-    ExecuteSameChain {  body_proxy: CosmosMsg },
-    BeginSocialRecovery {  target_addr: Addr },
-    ApproveSocialRecovery { },
-    BeginTransferOwnership {  target_addr: Addr },
-    ApproveTransferOwnership { },
+    AddRecoveryMember { member: Addr },
+    AddApprovalMember { member: Addr },
+    RemoveRecoveryMember { member: Addr },
+    RemoveApprovalMember { member: Addr },
+    RegisterSlave { chain: String, addr: Addr },
+    ExecuteSameChain { body_proxy: CosmosMsg },
+    BeginSocialRecovery { target_addr: Addr },
+    ApproveSocialRecovery {},
+    BeginTransferOwnership { target_addr: Addr },
+    ApproveTransferOwnership {},
 }
 
 #[cw_serde]

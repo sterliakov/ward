@@ -1,11 +1,12 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::{
-    entry_point, CosmosMsg, DepsMut, Env, MessageInfo, Response,
+    entry_point, to_binary, CosmosMsg, DepsMut, Env, MessageInfo, Response,
+    WasmMsg,
 };
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
-use crate::msg::InstantiateMsg;
+use crate::msg::{HostRegisterSlaveMsg, InstantiateMsg};
 use crate::state::{State, STATE};
 
 // version info for migration info
@@ -15,7 +16,7 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     _info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
@@ -25,7 +26,16 @@ pub fn instantiate(
 
     Ok(Response::new()
         .add_attribute("method", "instantiate")
-        .add_attribute("owner", msg.owner))
+        .add_attribute("slave_address", env.contract.address.clone())
+        .add_attribute("owner", msg.owner.clone())
+        .add_message(WasmMsg::Execute {
+            contract_addr: msg.owner.to_string(),
+            msg: to_binary(&HostRegisterSlaveMsg {
+                chain: msg.chain,
+                addr: env.contract.address.clone(),
+            })?,
+            funds: vec![],
+        }))
 }
 
 macro_rules! require_owner {
@@ -47,7 +57,9 @@ pub fn execute(
     require_owner!(info, state);
 
     if let CosmosMsg::Custom(_) = msg {
-        return Err(ContractError::NotImplemented("Custom messages not supported yet.".to_string()))
+        return Err(ContractError::NotImplemented(
+            "Custom messages not supported yet.".to_string(),
+        ));
     }
 
     Ok(Response::new()

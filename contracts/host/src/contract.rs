@@ -22,12 +22,13 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     let state = State {
-        owner: info.sender.clone(),
+        master: info.sender.clone(),
+        owner: msg.owner.clone(),
         potential_owner: None,
         recovery_pool: msg.recovery_pool.clone(),
         approval_pool: msg.approval_pool.clone(),
@@ -45,7 +46,8 @@ pub fn instantiate(
 
     Ok(Response::new()
         .add_attribute("method", "instantiate")
-        .add_attribute("owner", info.sender)
+        .add_attribute("owner", msg.owner)
+        .add_attribute("host_address", env.contract.address)
         .add_attribute(
             "recovery_pool",
             format!("[\"{}\"]", recovery_pool_repr),
@@ -71,36 +73,34 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::AddRecoveryMember { member, } => {
+        ExecuteMsg::AddRecoveryMember { member } => {
             execute::add_recovery_member(deps, info, member)
         }
-        ExecuteMsg::AddApprovalMember { member, } => {
+        ExecuteMsg::AddApprovalMember { member } => {
             execute::add_approval_member(deps, info, member)
         }
-        ExecuteMsg::RemoveRecoveryMember { member, } => {
+        ExecuteMsg::RemoveRecoveryMember { member } => {
             execute::remove_recovery_member(deps, info, member)
         }
-        ExecuteMsg::RemoveApprovalMember { member, } => {
+        ExecuteMsg::RemoveApprovalMember { member } => {
             execute::remove_approval_member(deps, info, member)
         }
-        ExecuteMsg::RegisterSlave { chain, addr, } => {
+        ExecuteMsg::RegisterSlave { chain, addr } => {
             execute::register_slave(deps, info, chain, addr)
         }
-        ExecuteMsg::ExecuteSameChain { body_proxy, } => {
-            execute::execute_samechain_transaction(
-                deps, info, body_proxy
-            )
+        ExecuteMsg::ExecuteSameChain { body_proxy } => {
+            execute::execute_samechain_transaction(deps, info, body_proxy)
         }
-        ExecuteMsg::BeginSocialRecovery { target_addr, } => {
+        ExecuteMsg::BeginSocialRecovery { target_addr } => {
             execute::begin_social_recovery(deps, info, target_addr)
         }
-        ExecuteMsg::ApproveSocialRecovery { } => {
+        ExecuteMsg::ApproveSocialRecovery {} => {
             execute::approve_social_recovery(deps, info)
         }
-        ExecuteMsg::BeginTransferOwnership { target_addr, } => {
+        ExecuteMsg::BeginTransferOwnership { target_addr } => {
             execute::begin_transfer_ownership(deps, info, target_addr)
         }
-        ExecuteMsg::ApproveTransferOwnership { } => {
+        ExecuteMsg::ApproveTransferOwnership {} => {
             execute::approve_transfer_ownership(deps, info)
         }
     }
@@ -192,10 +192,12 @@ mod execute {
         require_owner!(info, state);
         SLAVES.save(
             deps.storage,
-            chain,
+            chain.clone(),
             &deps.api.addr_validate(&addr.to_string())?,
         )?;
-        Ok(Response::new().add_attribute("action", "register_slave"))
+        Ok(Response::new()
+            .add_attribute("action", "register_slave")
+            .add_attribute("chain", chain.clone()))
     }
 
     pub fn execute_samechain_transaction(
@@ -208,11 +210,11 @@ mod execute {
         if let Ok(slave_contract) =
             SLAVES.load(deps.storage, "samechain".to_string())
         {
-            let action = CosmosMsg::Wasm(WasmMsg::Execute {
+            let action = WasmMsg::Execute {
                 contract_addr: slave_contract.to_string(),
                 msg: to_binary(&proxy_msg)?,
                 funds: info.funds,
-            });
+            };
             // let sub_msg = SubMsg::reply_on_success(
             //     action,
             //     ReplyKind::ReplySamechainTransaction as u64,
@@ -258,6 +260,7 @@ mod execute {
                 },
             )?;
             while let Ok(Some(_)) = ACTIVE_RECOVERY.pop_back(deps.storage) {}
+            // TODO: update master contract too
             Ok(Response::new()
                 .add_attribute("contract", "host")
                 .add_attribute("method", "do_transfer_ownership"))
@@ -450,14 +453,14 @@ mod tests {
         assert_eq!(state.potential_owner, Some(new_owner.clone()));
         assert_eq!(state.owner, creator);
 
-        let msg = ExecuteMsg::ApproveSocialRecovery { };
+        let msg = ExecuteMsg::ApproveSocialRecovery {};
         let res = execute(deps.as_mut(), mock_env(), info_a.clone(), msg);
         assert_eq!(res.unwrap_err(), ContractError::AlreadyVoted {});
         let state = STATE.load(&deps.storage).unwrap();
         assert_eq!(state.potential_owner, Some(new_owner.clone()));
         assert_eq!(state.owner, creator);
 
-        let msg = ExecuteMsg::ApproveSocialRecovery { };
+        let msg = ExecuteMsg::ApproveSocialRecovery {};
         execute(deps.as_mut(), mock_env(), info_b.clone(), msg).unwrap();
         let state = STATE.load(&deps.storage).unwrap();
         assert_eq!(state.potential_owner, None);
@@ -503,27 +506,27 @@ mod tests {
         assert_eq!(state.potential_owner, Some(new_owner.clone()));
         assert_eq!(state.owner, creator);
 
-        let msg = ExecuteMsg::ApproveTransferOwnership { };
+        let msg = ExecuteMsg::ApproveTransferOwnership {};
         let res = execute(deps.as_mut(), mock_env(), info.clone(), msg);
         assert_eq!(res.unwrap_err(), ContractError::Unauthorized {});
         let state = STATE.load(&deps.storage).unwrap();
         assert_eq!(state.potential_owner, Some(new_owner.clone()));
         assert_eq!(state.owner, creator);
 
-        let msg = ExecuteMsg::ApproveTransferOwnership { };
+        let msg = ExecuteMsg::ApproveTransferOwnership {};
         execute(deps.as_mut(), mock_env(), info_a.clone(), msg).unwrap();
         let state = STATE.load(&deps.storage).unwrap();
         assert_eq!(state.potential_owner, Some(new_owner.clone()));
         assert_eq!(state.owner, creator);
 
-        let msg = ExecuteMsg::ApproveTransferOwnership { };
+        let msg = ExecuteMsg::ApproveTransferOwnership {};
         let res = execute(deps.as_mut(), mock_env(), info_a.clone(), msg);
         assert_eq!(res.unwrap_err(), ContractError::AlreadyVoted {});
         let state = STATE.load(&deps.storage).unwrap();
         assert_eq!(state.potential_owner, Some(new_owner.clone()));
         assert_eq!(state.owner, creator);
 
-        let msg = ExecuteMsg::ApproveTransferOwnership { };
+        let msg = ExecuteMsg::ApproveTransferOwnership {};
         execute(deps.as_mut(), mock_env(), info_b.clone(), msg).unwrap();
         let state = STATE.load(&deps.storage).unwrap();
         assert_eq!(state.potential_owner, None);
