@@ -7,10 +7,8 @@ use cw2::set_contract_version;
 use itertools::Itertools;
 
 use crate::error::ContractError;
-use crate::msg::{
-    ExecuteMsg, GetCountResponse, InstantiateMsg, MasterMsg, QueryMsg,
-};
-use crate::state::{State, ACTIVE_RECOVERY, SLAVES, STATE};
+use crate::msg::{ExecuteMsg, InstantiateMsg, MasterMsg, QueryMsg};
+use crate::state::{get_key, set_key, State, ACTIVE_RECOVERY, SLAVES, STATE};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:host";
@@ -37,6 +35,7 @@ pub fn instantiate(
         recovery_approvals_needed: msg.recovery_approvals_needed,
         transfer_ownership_approvals_needed: msg
             .transfer_ownership_approvals_needed,
+        chain: msg.chain,
     };
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     STATE.save(deps.storage, &state)?;
@@ -190,14 +189,15 @@ mod execute {
         chain: String,
         addr: Addr,
     ) -> Result<Response, ContractError> {
-        let state = STATE.load(deps.storage)?;
         if info.sender != addr {
             return Err(ContractError::Unauthorized {});
         }
-        SLAVES.save(
+        set_key(
+            &SLAVES,
             deps.storage,
             chain.clone(),
-            &deps.api.addr_validate(&addr.to_string())?,
+            deps.api.addr_validate(&addr.to_string())?,
+            true,
         )?;
         Ok(Response::new()
             .add_attribute("action", "register_slave")
@@ -212,7 +212,7 @@ mod execute {
         let state = STATE.load(deps.storage)?;
         require_owner!(info, state);
         if let Ok(slave_contract) =
-            SLAVES.load(deps.storage, "samechain".to_string())
+            get_key(&SLAVES, deps.storage, &state.chain.to_string())
         {
             let action = WasmMsg::Execute {
                 contract_addr: slave_contract.to_string(),
@@ -399,21 +399,37 @@ mod execute {
     }
 }
 
-// #[cfg_attr(not(feature = "library"), entry_point)]
-// pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
-//     match msg {
-//         QueryMsg::GetCount {} => to_binary(&query::count(deps)?),
-//     }
-// }
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+    match msg {
+        QueryMsg::GetSlaves {} => to_binary(&query::get_slaves(deps)?),
+        QueryMsg::GetSlave { chain } => {
+            to_binary(&query::get_slave(deps, chain)?)
+        }
+    }
+}
 
-// pub mod query {
-//     use super::*;
+pub mod query {
+    use std::collections::HashMap;
 
-//     pub fn count(deps: Deps) -> StdResult<GetCountResponse> {
-//         let state = STATE.load(deps.storage)?;
-//         Ok(GetCountResponse { count: state.count })
-//     }
-// }
+    use crate::msg::{GetSlaveResponse, GetSlavesResponse};
+
+    use super::*;
+
+    pub fn get_slaves(deps: Deps) -> StdResult<GetSlavesResponse> {
+        let slaves: StdResult<HashMap<String, Addr>> =
+            SLAVES.iter(deps.storage)?.collect();
+        Ok(GetSlavesResponse { slaves: slaves? })
+    }
+
+    pub fn get_slave(
+        deps: Deps,
+        chain: String,
+    ) -> StdResult<GetSlaveResponse> {
+        let slave = get_key(&SLAVES, deps.storage, &chain);
+        Ok(GetSlaveResponse { slave: slave.map_or(None, |s| Some(s)) })
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -425,13 +441,15 @@ mod tests {
     fn proper_initialization() {
         let mut deps = mock_dependencies();
 
+        let info = mock_info("creator", &coins(1000, "earth"));
         let msg = InstantiateMsg {
             recovery_pool: vec![],
             approval_pool: vec![],
             recovery_approvals_needed: 0,
             transfer_ownership_approvals_needed: 0,
+            owner: info.sender.clone(),
+            chain: "foo-1".to_string(),
         };
-        let info = mock_info("creator", &coins(1000, "earth"));
 
         // we can just call .unwrap() to assert this was a success
         let res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
@@ -454,6 +472,8 @@ mod tests {
             approval_pool: vec![],
             recovery_approvals_needed: 2,
             transfer_ownership_approvals_needed: 0,
+            owner: creator.clone(),
+            chain: "foo-1".to_string(),
         };
         instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
 
@@ -495,6 +515,8 @@ mod tests {
             approval_pool: vec![],
             recovery_approvals_needed: 2,
             transfer_ownership_approvals_needed: 2,
+            owner: creator.clone(),
+            chain: "foo-1".to_string(),
         };
         instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
 

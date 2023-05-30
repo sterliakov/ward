@@ -9,7 +9,7 @@ export default function () {
   container.insertBefore(scriptElement, container.children[0]);
   scriptElement.remove();
 
-  chrome.extension.onMessage.addListener((msg, sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.type.endsWith('-result')) {
       console.warn('Result received (content-script)', msg);
       document.dispatchEvent(new CustomEvent(msg.type, {detail: msg}));
@@ -20,7 +20,12 @@ export default function () {
     'bg-proxy',
     (e) => {
       console.log('Got proxy ev', e);
-      chrome.runtime.sendMessage(e.detail);
+      chrome.runtime.sendMessage(
+        e.detail,
+        (msg) => {
+          document.dispatchEvent(new CustomEvent(msg.type, {detail: msg}));
+        },
+      );
     },
   );
 }

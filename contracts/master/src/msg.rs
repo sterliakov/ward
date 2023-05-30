@@ -1,5 +1,5 @@
 use crate::state::CodeId;
-use cosmwasm_schema::cw_serde;
+use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::Addr;
 use std::collections::HashMap;
 
@@ -35,6 +35,7 @@ pub struct HostInstantiateMsg {
     pub recovery_approvals_needed: u32,
     pub transfer_ownership_approvals_needed: u32,
     pub owner: Addr,
+    pub chain: String,
 }
 
 #[cw_serde]
@@ -45,3 +46,15 @@ pub struct SlaveInstantiateMsg {
 
 // TODO: get rid of this shitty "recommended" layout
 // All messages should go to a separate crate for reusability, now it sucks.
+
+#[cw_serde]
+#[derive(QueryResponses)]
+pub enum QueryMsg {
+    #[returns(GetHostResponse)]
+    GetHostContract { owner: Addr },
+}
+
+#[cw_serde]
+pub struct GetHostResponse {
+    pub host: Addr,
+}

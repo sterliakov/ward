@@ -1,7 +1,6 @@
 import React from 'react';
 
 import init from '../content/init';
-import {DEBUG} from '../internal/ward';
 import AccountScreen from './accountScreen';
 import FirstStep from './firstStep';
 import SignupScreen from './signupScreen';
@@ -12,7 +11,7 @@ export default class PopupForm extends React.Component {
   };
 
   componentDidMount() {
-    if (!DEBUG) init();
+    init();
   }
 
   render() {

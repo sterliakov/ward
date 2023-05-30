@@ -1,7 +1,8 @@
 if (typeof window.browser === 'undefined') window.browser = window.chrome;
 const chrome = window.browser;
 
-function respond(msg) {
+function respond(sendResponse, msg) {
+  sendResponse(msg);
   chrome.tabs.query(
     {active: true},
     (tabs) => {
@@ -10,8 +11,7 @@ function respond(msg) {
   );
 }
 
-chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
-  console.log('Got any message', request);
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   switch (request.type) {
   case 'sign': {
     const url = new URL(chrome.extension.getURL('sign.html'));
@@ -37,24 +37,29 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     break;
   }
   case 'signDeliver':
-    respond({type: 'sign-result', request});
+    respond(sendResponse, {type: 'sign-result', request});
     break;
   case 'getKey': {
-    const result = await new Promise((resolve) =>
+    console.log('Got getKey message', request);
+    new Promise((resolve) =>
       chrome.storage.sync.get(request.key, (res) => resolve(res)),
-    );
-    respond({type: 'getKey-result', result});
+    ).then((result) => {
+      respond(sendResponse, {type: 'getKey-result', result});
+      console.log('getKey response', result);
+    });
     break;
   }
   case 'setKey': {
-    const result = await new Promise((resolve) =>
+    new Promise((resolve) =>
       chrome.storage.sync.set(
         {[request.key]: request.value},
         (res) => resolve(res),
       ),
-    );
-    respond({type: 'setKey-result', result});
+    ).then((result) => {
+      respond(sendResponse, {type: 'setKey-result', result});
+    });
     break;
   }
   }
+  return true;
 });

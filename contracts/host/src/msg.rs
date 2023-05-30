@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, CosmosMsg};
 
@@ -8,6 +10,7 @@ pub struct InstantiateMsg {
     pub recovery_approvals_needed: u32,
     pub transfer_ownership_approvals_needed: u32,
     pub owner: Addr,
+    pub chain: String,
 }
 
 #[cw_serde]
@@ -27,17 +30,23 @@ pub enum ExecuteMsg {
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
-    // GetCount returns the current count as a json-encoded number
-    #[returns(GetCountResponse)]
-    GetCount {},
+    #[returns(GetSlavesResponse)]
+    GetSlaves {},
+
+    #[returns(GetSlaveResponse)]
+    GetSlave { chain: String },
+}
+
+#[cw_serde]
+pub struct GetSlavesResponse {
+    pub slaves: HashMap<String, Addr>,
+}
+#[cw_serde]
+pub struct GetSlaveResponse {
+    pub slave: Option<Addr>,
 }
 
 #[cw_serde]
 pub enum MasterMsg {
     UpdateOwner { old_owner: Addr, new_owner: Addr },
-}
-
-#[cw_serde]
-pub struct GetCountResponse {
-    pub count: i32,
 }

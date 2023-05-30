@@ -146,12 +146,10 @@ export class NewAccountScreen extends React.Component {
       try {
         const result = await ward.broadcastRaw(chainId, signed);
         console.log(result);
-        this.setState({inProgress: false});
         try {
           // If this succeeded, we're all set, transaction was sent.
-          const logs = JSON.parse(result.rawLog);
-          this.setState({txHash: result.transactionHash});
-          return logs;
+          // this.setState({txHash: result.transactionHash});
+          return JSON.parse(result.rawLog);
         }
         catch (ex) {
           const exStr = ex.toString();
@@ -206,6 +204,7 @@ export class NewAccountScreen extends React.Component {
         ),
       ),
     );
+    this.setState({inProgress: false, txHash: true}); // TODO: clean
   }
 
   render() {

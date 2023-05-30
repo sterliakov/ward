@@ -1,15 +1,15 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::{
-    entry_point, to_binary, DepsMut, Env, MessageInfo, Response, SubMsg,
-    WasmMsg,
+    entry_point, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo,
+    Reply, Response, StdResult, SubMsg, SubMsgResult, WasmMsg,
 };
-use cosmwasm_std::{Reply, SubMsgResult};
 use cw2::set_contract_version;
 use itertools::Itertools;
 
 use crate::error::ContractError;
 use crate::msg::{
-    ExecuteMsg, HostInstantiateMsg, InstantiateMsg, SlaveInstantiateMsg,
+    ExecuteMsg, HostInstantiateMsg, InstantiateMsg, QueryMsg,
+    SlaveInstantiateMsg,
 };
 use crate::state::{State, SLAVES, STATE, WALLETS};
 
@@ -86,6 +86,7 @@ pub fn execute(
                         approval_pool,
                         transfer_ownership_approvals_needed,
                         owner: info.sender.clone(),
+                        chain: state.host_chain,
                     })?,
                     funds: vec![],
                     label: info.sender.to_string(),
@@ -119,10 +120,11 @@ pub fn execute(
             }
         }
         ExecuteMsg::UpdateOwner { old_owner, new_owner } => {
-            let wallet = WALLETS.load(deps.storage, old_owner)?;
+            let wallet = WALLETS.load(deps.storage, old_owner.clone())?;
             if wallet != info.sender {
                 Err(ContractError::Unauthorized {})
             } else {
+                WALLETS.remove(deps.storage, old_owner);
                 WALLETS.save(deps.storage, new_owner, &wallet)?;
                 Ok(Response::new()
                     .add_attribute("contract", "master")
@@ -132,21 +134,24 @@ pub fn execute(
     }
 }
 
-// #[cfg_attr(not(feature = "library"), entry_point)]
-// pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
-//     match msg {
-//         QueryMsg::GetCount {} => to_binary(&query::count(deps)?),
-//     }
-// }
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+    match msg {
+        QueryMsg::GetHostContract { owner } => {
+            to_binary(&query::get_host(deps, owner)?)
+        }
+    }
+}
 
-// pub mod query {
-//     use super::*;
+pub mod query {
+    use super::*;
+    use crate::msg::GetHostResponse;
 
-//     pub fn count(deps: Deps) -> StdResult<GetCountResponse> {
-//         let state = STATE.load(deps.storage)?;
-//         Ok(GetCountResponse { count: state.count })
-//     }
-// }
+    pub fn get_host(deps: Deps, owner: Addr) -> StdResult<GetHostResponse> {
+        let wallet = WALLETS.load(deps.storage, owner)?;
+        Ok(GetHostResponse { host: wallet })
+    }
+}
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn reply(
@@ -196,95 +201,4 @@ pub fn reply(
             }
         }
     }
-}
-
-#[cfg(test)]
-mod tests {
-    // use super::*;
-    // use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-    // use cosmwasm_std::{coins, from_binary};
-
-    // #[test]
-    // fn proper_initialization() {
-    //     let mut deps = mock_dependencies();
-
-    //     let msg = InstantiateMsg {
-    //         count: 17,
-    //         recovery_pool: vec![],
-    //         approval_pool: vec![],
-    //     };
-    //     let info = mock_info("creator", &coins(1000, "earth"));
-
-    //     // we can just call .unwrap() to assert this was a success
-    //     let res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
-    //     assert_eq!(0, res.messages.len());
-
-    //     // it worked, let's query the state
-    //     let res =
-    //         query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-    //     let value: GetCountResponse = from_binary(&res).unwrap();
-    //     assert_eq!(17, value.count);
-    // }
-
-    // #[test]
-    // fn increment() {
-    //     let mut deps = mock_dependencies();
-
-    //     let msg = InstantiateMsg {
-    //         count: 17,
-    //         recovery_pool: vec![],
-    //         approval_pool: vec![],
-    //     };
-    //     let info = mock_info("creator", &coins(2, "token"));
-    //     let _res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
-
-    //     // beneficiary can release it
-    //     let info = mock_info("anyone", &coins(2, "token"));
-    //     let msg = ExecuteMsg::Increment { nonce: 1 };
-    //     let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
-
-    //     // should increase counter by 1
-    //     let res =
-    //         query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-    //     let value: GetCountResponse = from_binary(&res).unwrap();
-    //     assert_eq!(18, value.count);
-
-    //     let info = mock_info("anyone", &coins(2, "token"));
-    //     let msg = ExecuteMsg::Increment { nonce: 1 };
-    //     let Err(_res) = execute(deps.as_mut(), mock_env(), info, msg) else {panic!("Should be error")};
-    //     let res =
-    //         query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-    //     let value: GetCountResponse = from_binary(&res).unwrap();
-    //     assert_eq!(18, value.count);
-    // }
-
-    // #[test]
-    // fn reset() {
-    //     let mut deps = mock_dependencies();
-
-    //     let msg = InstantiateMsg { count: 17 };
-    //     let info = mock_info("creator", &coins(2, "token"));
-    //     let _res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
-
-    //     // beneficiary can release it
-    //     let unauth_info = mock_info("anyone", &coins(2, "token"));
-    //     let msg = ExecuteMsg::Reset { count: 5 };
-    //     let res = execute(deps.as_mut(), mock_env(), unauth_info, msg);
-    //     match res {
-    //         Err(ContractError::Unauthorized {}) => {}
-    //         _ => panic!("Must return unauthorized error"),
-    //     }
-
-    //     // only the original creator can reset the counter
-    //     let auth_info = mock_info("creator", &coins(2, "token"));
-    //     let msg = ExecuteMsg::Reset { count: 5 };
-    //     let _res =
-    //         execute(deps.as_mut(), mock_env(), auth_info, msg).unwrap();
-
-    //     // should now be 5
-    //     let res =
-    //         query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-    //     let value: GetCountResponse = from_binary(&res).unwrap();
-    //     assert_eq!(5, value.count);
-    // }
 }

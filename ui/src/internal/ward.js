@@ -52,13 +52,13 @@ export const SLAVE_CHAINS = {
   },
 };
 export const FACTORY_CONTRACT_ADDRESS =
-  'wasm17a7mlm84taqmd3enrpcxhrwzclj9pga8efz83vrswnnywr8tv26sapqg8f';
+  'wasm1erul6xyq0gk6ws98ncj7lnq9l4jn4gnnu9we73gdz78yyl2lr7qqc2r4ww';
 
-export const HOST_CONTRACT_ADDRESS =
-  'wasm1ctnjk7an90lz5wjfvr3cf6x984a8cjnv8dpmztmlpcq4xteaa2xsfr3xd0';
-export const SLAVE_ADDRESSES = {
-  'foo-1': 'wasm14xc5dkz0rn8j99lxz69mkv3wzawmadg7xurkzy49m9yefmqx5c6sv5vy55',
-};
+// export const HOST_CONTRACT_ADDRESS =
+//   'wasm1ctnjk7an90lz5wjfvr3cf6x984a8cjnv8dpmztmlpcq4xteaa2xsfr3xd0';
+// export const SLAVE_ADDRESSES = {
+//   'foo-1': 'wasm14xc5dkz0rn8j99lxz69mkv3wzawmadg7xurkzy49m9yefmqx5c6sv5vy55',
+// };
 
 export const DEBUG = true;
 export function request(args, wait) {
@@ -80,30 +80,35 @@ export function request(args, wait) {
 }
 
 // FIXME: DEBUG only
-const a = 'wasm15afv8rty6epfxlhn7pjjl5hs8kff8evpk22ydm';
-const TEMP_DATA = {
-  __WARD_default_address: a,
-  [`__WARD_${a}`]:
-    '{"type":"directsecp256k1hdwallet-v1","kdf":{"algorithm":"argon2id","params":{"outputLength":32,"opsLimit":24,"memLimitKib":12288}},"encryption":{"algorithm":"xchacha20poly1305-ietf"},"data":"pIOGpgUDlexj0vjG2+q/D9KkW2OdQmcy+xXHeU8JArTNm1tOFa2+Zo6zhzdV1ouuCSug+3v6vuE++wACsZgcYHeqzZfX9HVwQyZ2U9ocQII/cMA6nnWGZw45dso7+qdxLu0geP+94+85npHQgqsCl1wZOqBsk5LbeN0uoNIpqms258FhE9jwt/CbM0gb+2/szMZTjTk592AVZWMXsNUMCGDttw9AGwXP9+IcbJCpae+Hde0JbxiuXh/w37DTFrx4MZYVEHfKfPfJ+ZZATzz+8gACpWy4l+86gsU9SJb18XGaST8IQC+yAUcvW+LCR3JlpWDZgXXtAL6Irvfi56MplsavaLCK8Txshvi6tV6Hdw=="}',
-};
+// const a = 'wasm15afv8rty6epfxlhn7pjjl5hs8kff8evpk22ydm';
+// const TEMP_DATA = {
+//   __WARD_default_address: a,
+//   [`__WARD_${a}`]:
+//     '{"type":"directsecp256k1hdwallet-v1","kdf":{"algorithm":"argon2id","params":{"outputLength":32,"opsLimit":24,"memLimitKib":12288}},"encryption":{"algorithm":"xchacha20poly1305-ietf"},"data":"pIOGpgUDlexj0vjG2+q/D9KkW2OdQmcy+xXHeU8JArTNm1tOFa2+Zo6zhzdV1ouuCSug+3v6vuE++wACsZgcYHeqzZfX9HVwQyZ2U9ocQII/cMA6nnWGZw45dso7+qdxLu0geP+94+85npHQgqsCl1wZOqBsk5LbeN0uoNIpqms258FhE9jwt/CbM0gb+2/szMZTjTk592AVZWMXsNUMCGDttw9AGwXP9+IcbJCpae+Hde0JbxiuXh/w37DTFrx4MZYVEHfKfPfJ+ZZATzz+8gACpWy4l+86gsU9SJb18XGaST8IQC+yAUcvW+LCR3JlpWDZgXXtAL6Irvfi56MplsavaLCK8Txshvi6tV6Hdw=="}',
+// };
 
 export async function getKey(key) {
-  if (DEBUG) return TEMP_DATA[key];
-  console.log(`Fetching value of key ${key}`);
+  // if (DEBUG) return TEMP_DATA[key];
+  // console.log(`Fetching value of key ${key}`);
   const response = await request({type: 'getKey', key}, 'getKey');
   return response.result[key];
 }
 
 export async function setKey(key, value) {
-  if (DEBUG) {
-    TEMP_DATA[key] = value;
-    return;
-  }
-  console.log(`Setting value of key ${key} to ${value}`);
+  // if (DEBUG) {
+  //   TEMP_DATA[key] = value;
+  //   return;
+  // }
+  // console.log(`Setting value of key ${key} to ${value}`);
   return request({type: 'setKey', key, value}, 'setKey');
 }
 
 export default class Ward {
+  constructor() {
+    this._address = null;
+    this._hostContract = null;
+  }
+
   static async validateMnemonic(mnemonic, opts = {}) {
     const wallet = await DirectSecp256k1HdWallet.fromMnemonic(mnemonic, opts);
     const {address} = (await wallet.getAccounts())[0];
@@ -125,7 +130,10 @@ export default class Ward {
   }
 
   async getLocalAddress() {
-    return getKey('__WARD_default_address');
+    if (!this._address) {
+      this._address = await getKey('__WARD_default_address');
+    }
+    return this._address;
   }
 
   async createFromMnemonic(mnemonic, ourPassword, opts = {}) {
@@ -165,10 +173,33 @@ export default class Ward {
   }
 
   async getClient(chainId) {
-    const chain = SLAVE_CHAINS[chainId];
+    const chain =
+      chainId === HOST_CHAIN.chainId ? HOST_CHAIN : SLAVE_CHAINS[chainId];
     if (typeof chain === 'undefined') throw new Error('Unknown chain.');
 
     return CosmWasmClient.connect(chain.rpc);
+  }
+
+  async getHostContract() {
+    if (!this._hostContract) {
+      const client = await this.getClient(HOST_CHAIN.chainId);
+      const response = await client.queryContractSmart(
+        FACTORY_CONTRACT_ADDRESS,
+        {get_host_contract: {owner: await this.getLocalAddress()}},
+      );
+      this._hostContract = response.host;
+    }
+    return this._hostContract;
+  }
+
+  async getSlaveContracts() {
+    const host = await this.getHostContract();
+    if (!this._slaveContracts) {
+      const client = await this.getClient(HOST_CHAIN.chainId);
+      const response = await client.queryContractSmart(host, {get_slaves: {}});
+      this._slaveContracts = response.slaves;
+    }
+    return this._slaveContracts;
   }
 
   async getSequence(chainId, address) {
@@ -182,7 +213,7 @@ export default class Ward {
 
   async getBalance(chainId, denom) {
     const client = await this.getClient(chainId);
-    const addr = SLAVE_ADDRESSES[chainId];
+    const addr = (await this.getSlaveContracts())[chainId];
     const balance = await client.getBalance(addr, denom);
     await client.disconnect();
     console.log(chainId, denom, addr, balance);
@@ -227,7 +258,7 @@ export default class Ward {
       throw new Error('Not implemented: only single account allowed now.');
     }
 
-    return SLAVE_ADDRESSES[chainId];
+    return (await this.getSlaveContracts())[chainId];
   }
 
   async makeOfflineClient(password) {
@@ -265,12 +296,12 @@ export default class Ward {
     }
   }
 
-  _wrapWithOuter(innerMsg, signerAddress) {
+  async _wrapWithOuter(innerMsg, signerAddress) {
     return {
       typeUrl: EXECUTE_MSG_TYPE_URL,
       value: {
         sender: signerAddress,
-        contract: HOST_CONTRACT_ADDRESS,
+        contract: await this.getHostContract(),
         msg: innerMsg,
         funds: [],
       },
@@ -301,7 +332,10 @@ export default class Ward {
     const offline = await this.makeOfflineClient(password);
 
     const innerMsg = this._wrapWithInner(chainId, msg);
-    const wrappedMsg = this._wrapWithOuter(toBinary(innerMsg), account.address);
+    const wrappedMsg = await this._wrapWithOuter(
+      toBinary(innerMsg),
+      account.address,
+    );
 
     let accountNumber, sequence;
     if (accountData) {
@@ -333,8 +367,10 @@ export default class Ward {
     else throw new Error('Unknown sign mode.');
   }
 
-  addressToChainId(signerAddress) {
-    for (const [chainId, addr] of Object.entries(SLAVE_ADDRESSES)) {
+  async addressToChainId(signerAddress) {
+    for (const [chainId, addr] of Object.entries(
+      await this.getSlaveContracts(),
+    )) {
       if (addr === signerAddress) return chainId;
     }
 
@@ -378,7 +414,7 @@ export default class Ward {
       throw new Error('Can submit strictly one message only.');
     }
 
-    const chainId = this.addressToChainId(signerAddress);
+    const chainId = await this.addressToChainId(signerAddress);
     if (chainId !== signDoc.chain_id) {
       throw new Error('Chain ID in request does not match account address.');
     }
