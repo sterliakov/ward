@@ -10,7 +10,8 @@ export default class PopupForm extends React.Component {
     step: 'start',
   };
 
-  componentDidMount() {
+  constructor(props) {
+    super(props);
     init();
   }
 

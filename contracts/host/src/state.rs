@@ -8,6 +8,7 @@ pub struct State {
     pub owner: Addr,
     pub master: Addr,
     pub potential_owner: Option<Addr>, // Used during ownership transfer
+    pub recovery_method: Option<String>, // Used during ownership transfer
     pub recovery_pool: Vec<Addr>,
     pub approval_pool: Vec<Addr>,
     pub recovery_approvals_needed: u32,

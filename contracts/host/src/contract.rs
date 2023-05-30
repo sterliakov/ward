@@ -30,6 +30,7 @@ pub fn instantiate(
         master: info.sender.clone(),
         owner: msg.owner.clone(),
         potential_owner: None,
+        recovery_method: None,
         recovery_pool: msg.recovery_pool.clone(),
         approval_pool: msg.approval_pool.clone(),
         recovery_approvals_needed: msg.recovery_approvals_needed,
@@ -95,14 +96,14 @@ pub fn execute(
         ExecuteMsg::BeginSocialRecovery { target_addr } => {
             execute::begin_social_recovery(deps, info, target_addr)
         }
-        ExecuteMsg::ApproveSocialRecovery {} => {
-            execute::approve_social_recovery(deps, info)
+        ExecuteMsg::ApproveSocialRecovery { target_addr } => {
+            execute::approve_social_recovery(deps, info, target_addr)
         }
         ExecuteMsg::BeginTransferOwnership { target_addr } => {
             execute::begin_transfer_ownership(deps, info, target_addr)
         }
-        ExecuteMsg::ApproveTransferOwnership {} => {
-            execute::approve_transfer_ownership(deps, info)
+        ExecuteMsg::ApproveTransferOwnership { target_addr } => {
+            execute::approve_transfer_ownership(deps, info, target_addr)
         }
     }
 }
@@ -261,6 +262,7 @@ mod execute {
                 |mut state| -> Result<_, ContractError> {
                     state.owner = new_owner.clone();
                     state.potential_owner = None;
+                    state.recovery_method = None;
                     Ok(state)
                 },
             )?;
@@ -293,6 +295,7 @@ mod execute {
             deps.storage,
             |mut state| -> Result<_, ContractError> {
                 state.potential_owner = Some(target_addr);
+                state.recovery_method = Some(method.to_string());
                 Ok(state)
             },
         )?;
@@ -367,6 +370,7 @@ mod execute {
     pub fn approve_social_recovery(
         deps: DepsMut,
         info: MessageInfo,
+        target: Addr,
     ) -> Result<Response, ContractError> {
         let state = STATE.load(deps.storage)?;
         if !state.recovery_pool.contains(&info.sender)
@@ -377,8 +381,15 @@ mod execute {
             return Err(ContractError::Unauthorized {});
         }
         require_first_vote!(deps.storage, &info.sender);
-        if state.potential_owner == None {
+        if state.potential_owner == None
+            || state.recovery_method != Some("recovery".to_string())
+        {
             return Err(ContractError::NotInProgress {});
+        }
+        if state.potential_owner != Some(target) {
+            return Err(ContractError::InvariantMismatch(
+                "Transfer account not matching submitted.".to_string(),
+            ));
         }
         _approve_recovery(deps, info, "recovery")
     }
@@ -386,14 +397,22 @@ mod execute {
     pub fn approve_transfer_ownership(
         deps: DepsMut,
         info: MessageInfo,
+        target: Addr,
     ) -> Result<Response, ContractError> {
         let state = STATE.load(deps.storage)?;
         if !state.recovery_pool.contains(&info.sender) {
             return Err(ContractError::Unauthorized {});
         }
         require_first_vote!(deps.storage, &info.sender);
-        if state.potential_owner == None {
+        if state.potential_owner == None
+            || state.recovery_method != Some("transfer_ownership".to_string())
+        {
             return Err(ContractError::NotInProgress {});
+        }
+        if state.potential_owner != Some(target) {
+            return Err(ContractError::InvariantMismatch(
+                "Transfer account not matching submitted.".to_string(),
+            ));
         }
         _approve_recovery(deps, info, "transfer_ownership")
     }
@@ -402,6 +421,9 @@ mod execute {
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
+        QueryMsg::GetRecoveryPool {} => {
+            to_binary(&query::get_recovery_pool(deps)?)
+        }
         QueryMsg::GetSlaves {} => to_binary(&query::get_slaves(deps)?),
         QueryMsg::GetSlave { chain } => {
             to_binary(&query::get_slave(deps, chain)?)
@@ -412,7 +434,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 pub mod query {
     use std::collections::HashMap;
 
-    use crate::msg::{GetSlaveResponse, GetSlavesResponse};
+    use crate::msg::{
+        GetRecoveryPoolResponse, GetSlaveResponse, GetSlavesResponse,
+    };
 
     use super::*;
 
@@ -420,6 +444,25 @@ pub mod query {
         let slaves: StdResult<HashMap<String, Addr>> =
             SLAVES.iter(deps.storage)?.collect();
         Ok(GetSlavesResponse { slaves: slaves? })
+    }
+
+    pub fn get_recovery_pool(
+        deps: Deps,
+    ) -> StdResult<GetRecoveryPoolResponse> {
+        let state = STATE.load(deps.storage)?;
+        Ok(GetRecoveryPoolResponse {
+            members: state.recovery_pool,
+            recovery_approvals_count: state.recovery_approvals_needed,
+            transfer_approvals_count: state
+                .transfer_ownership_approvals_needed,
+            recovery_progress: if state.recovery_method.is_some() {
+                ACTIVE_RECOVERY.len(deps.storage)?
+            } else {
+                0
+            },
+            recovery_method: state.recovery_method,
+            new_owner: state.potential_owner,
+        })
     }
 
     pub fn get_slave(

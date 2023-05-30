@@ -1,6 +1,8 @@
 import {makeSignDoc} from '@cosmjs/amino';
+import {toBinary} from '@cosmjs/cosmwasm-stargate';
 import {coins} from '@cosmjs/stargate';
 import React from 'react';
+import {Save, Trash} from 'react-bootstrap-icons';
 import Alert from 'react-bootstrap/Alert';
 import Button from 'react-bootstrap/Button';
 import Col from 'react-bootstrap/Col';
@@ -10,8 +12,14 @@ import Nav from 'react-bootstrap/Nav';
 import Row from 'react-bootstrap/Row';
 import Spinner from 'react-bootstrap/Spinner';
 import Tab from 'react-bootstrap/Tab';
+import Table from 'react-bootstrap/Table';
 
-import Ward from '../internal/ward';
+import Ward, {
+  EXECUTE_MSG_TYPE_URL,
+  FACTORY_CONTRACT_ADDRESS,
+  HOST_CHAIN,
+  SLAVE_CHAINS,
+} from '../internal/ward';
 
 export class BalanceRow extends React.Component {
   render() {
@@ -120,7 +128,7 @@ export class TransferScreen extends React.Component {
                   <Form.Control
                     autoFocus
                     type="text"
-                    placeholder="inj1..." // TODO: dynamic prefix
+                    placeholder={`${HOST_CHAIN.prefix}1...`}
                     value={this.state.to}
                     onChange={(ev) => this.setState({to: ev.target.value})}
                   />
@@ -267,6 +275,316 @@ export class AccountState extends React.Component {
             </Col>
           </Row>
         </Tab.Container>
+
+        <hr />
+
+        <Row>
+          <Col xs={6}>
+            <Button
+              variant="primary"
+              type="button"
+              title="Manage your own account"
+              onClick={this.props.openManageOwn}
+            >
+              Manage own
+            </Button>
+          </Col>
+          <Col xs={6}>
+            <Button
+              variant="secondary"
+              type="button"
+              title="Manage other person account"
+              onClick={this.props.openManageOther}
+            >
+              Manage other
+            </Button>
+          </Col>
+        </Row>
+      </div>
+    );
+  }
+}
+
+export class ManageOwnScreen extends React.Component {
+  state = {
+    recoveryPool: [],
+    newRecoveryMember: '',
+    newOwner: '',
+    password: '',
+    error: null,
+    txHash: null,
+    inProgress: false,
+    transferInProgress: true,
+  };
+
+  constructor(props) {
+    super(props);
+    this.ward = new Ward();
+  }
+
+  async componentDidMount() {
+    const {
+      members,
+      recovery_approvals_count,
+      transfer_approvals_count,
+      recovery_progress,
+      recovery_method,
+      new_owner,
+    } = await this.ward.getRecoveryState();
+    console.log(
+      members,
+      recovery_approvals_count,
+      transfer_approvals_count,
+      recovery_progress,
+      recovery_method,
+      new_owner,
+    );
+    this.setState({
+      recoveryPool: members,
+      transferInProgress: recovery_method != null,
+      newOwner: new_owner || '',
+    });
+  }
+
+  async sendMessage(msg) {
+    const {chainId} = HOST_CHAIN;
+    console.log(msg);
+    const wrapped = {
+      typeUrl: EXECUTE_MSG_TYPE_URL,
+      value: {
+        sender: await this.ward.getLocalAddress(),
+        contract: await this.ward.getHostContract(),
+        msg: toBinary(msg),
+        funds: [],
+      },
+    };
+    const fee = {amount: [], gas: '400000'};
+    const signed = await this.ward.signSimpleAsSelf(
+      chainId,
+      wrapped,
+      fee,
+      null,
+      this.state.password,
+    );
+    try {
+      const result = await this.ward.broadcastRaw(chainId, signed);
+      console.log(result);
+      try {
+        // If this succeeded, we're all set, transaction was sent.
+        // this.setState({txHash: result.transactionHash});
+        return JSON.parse(result.rawLog);
+      }
+      catch (ex) {
+        const exStr = ex.toString();
+        if (exStr.includes('Error parsing into type')) {
+          this.setState({
+            error:
+              'Creation failed. Please make sure that addresses are valid.',
+          });
+        }
+        else {
+          this.setState({error: result?.rawLog ?? 'Broadcasting failed.'});
+        }
+        ex.handled = true;
+        throw ex;
+      }
+    }
+    catch (ex) {
+      if (!ex.handled) this.setState({error: ex.toString()});
+      throw ex;
+    }
+  }
+
+  requirePassword() {
+    if (!this.state.password) {
+      this.setState({error: 'Please fill in your password.'});
+      return true;
+    }
+  }
+
+  async saveRecoveryMember() {
+    if (this.requirePassword()) return;
+    this.setState({error: null, inProgress: true});
+    try {
+      await this.sendMessage({
+        add_recovery_member: {member: this.state.newRecoveryMember},
+      });
+    }
+    catch (ex) {
+      return;
+    }
+    this.props.back();
+  }
+  async removeRecoveryMember(addr) {
+    if (this.requirePassword()) return;
+    this.setState({error: null, inProgress: true});
+    try {
+      await this.sendMessage({
+        remove_recovery_member: {member: addr},
+      });
+    }
+    catch (ex) {
+      return;
+    }
+    this.props.back();
+  }
+  async transferOwnership() {
+    if (this.requirePassword()) return;
+    this.setState({error: null, inProgress: true});
+    try {
+      await this.sendMessage({
+        begin_transfer_ownership: {target_addr: this.state.newOwner},
+      });
+    }
+    catch (ex) {
+      return;
+    }
+    this.props.back();
+  }
+
+  render() {
+    return (
+      <div>
+        <Row className="py-3">
+          <Col>
+            <div className="d-flex justify-content-between align-items-center">
+              <h1 className="fs-5" style={{textAlign: 'center'}}>
+                Manage own account
+              </h1>
+              <Button variant="secondary" onClick={this.props.back}>
+                Back
+              </Button>
+            </div>
+          </Col>
+        </Row>
+
+        <Table
+          style={{maxWidth: '100%', tableLayout: 'fixed'}}
+          striped
+          bordered
+          hover
+          responsive
+        >
+          <thead>
+            <tr>
+              <th style={{width: '80%'}}>Address</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {this.state.recoveryPool.map((addr) => (
+              <tr key={addr}>
+                <td
+                  style={{overflow: 'hidden', textOverflow: 'ellipsis'}}
+                  title={addr}
+                >
+                  {addr}
+                </td>
+                <td>
+                  <Button
+                    title="Remove"
+                    variant="danger"
+                    type="button"
+                    onClick={() => this.removeRecoveryMember(addr)}
+                    disabled={this.state.inProgress}
+                  >
+                    {this.state.inProgress ? (
+                      <Spinner animation="border" variant="light" />
+                    ) : (
+                      <Trash />
+                    )}
+                  </Button>
+                </td>
+              </tr>
+            ))}
+            <tr>
+              <td>
+                <Form.Control
+                  autoFocus
+                  type="text"
+                  id="new-recovery-member"
+                  className="w-auto"
+                  placeholder={`${HOST_CHAIN.prefix}1...`}
+                  value={this.state.newRecoveryMember}
+                  onChange={(ev) =>
+                    this.setState({newRecoveryMember: ev.target.value})
+                  }
+                />
+              </td>
+              <td>
+                <Button
+                  title="Save"
+                  variant="success"
+                  type="button"
+                  onClick={this.saveRecoveryMember.bind(this)}
+                  disabled={this.state.inProgress}
+                >
+                  {this.state.inProgress ? (
+                    <Spinner animation="border" variant="light" />
+                  ) : (
+                    <Save />
+                  )}
+                </Button>
+              </td>
+            </tr>
+          </tbody>
+        </Table>
+
+        <hr />
+
+        <Row className="align-items-center my-3">
+          <Col xs={8}>
+            <FloatingLabel
+              label="Transfer ownership"
+              controlId="transfer-destination"
+            >
+              <Form.Control
+                autoFocus
+                type="text"
+                placeholder={`${HOST_CHAIN.prefix}1...`}
+                value={this.state.newOwner}
+                onChange={(ev) => this.setState({newOwner: ev.target.value})}
+                disabled={this.state.transferInProgress}
+              />
+            </FloatingLabel>
+          </Col>
+          <Col xs={4}>
+            <Button
+              title="Transfer the wallet to another account"
+              variant="danger"
+              type="button"
+              onClick={this.transferOwnership.bind(this)}
+              disabled={this.state.transferInProgress || this.state.inProgress}
+            >
+              {this.state.inProgress && !this.state.transferInProgress ? (
+                <Spinner animation="border" variant="light" />
+              ) : (
+                'Transfer'
+              )}
+            </Button>
+          </Col>
+        </Row>
+
+        <FloatingLabel
+          className="mb-3"
+          label="Password"
+          controlId="manage-own-password"
+        >
+          <Form.Control
+            type="password"
+            autoComplete="current-password"
+            placeholder="Password"
+            value={this.state.password}
+            onChange={(ev) => this.setState({password: ev.target.value})}
+          />
+        </FloatingLabel>
+        {this.state.error && <Alert variant="danger">{this.state.error}</Alert>}
+        {this.state.txHash && (
+          <Alert variant="success">
+            <Alert.Heading>Transaction sent!</Alert.Heading>
+            <span style={{fontSize: '0.55rem'}}>{this.state.txHash}</span>
+          </Alert>
+        )}
       </div>
     );
   }
@@ -287,6 +605,8 @@ export default class AccountScreen extends React.Component {
             openTransferScreen={(denom, chainId) =>
               this.setState({denom, chainId, step: 'transfer'})
             }
+            openManageOwn={() => this.setState({step: 'manageOwn'})}
+            openManageOther={() => this.setState({step: 'manageOther'})}
           />
         )}
         {this.state.step === 'transfer' && (
@@ -295,6 +615,9 @@ export default class AccountScreen extends React.Component {
             denom={this.state.denom}
             chainId={this.state.chainId}
           />
+        )}
+        {this.state.step === 'manageOwn' && (
+          <ManageOwnScreen back={() => this.setState({step: 'balances'})} />
         )}
       </>
     );

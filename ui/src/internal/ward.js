@@ -52,7 +52,7 @@ export const SLAVE_CHAINS = {
   },
 };
 export const FACTORY_CONTRACT_ADDRESS =
-  'wasm1erul6xyq0gk6ws98ncj7lnq9l4jn4gnnu9we73gdz78yyl2lr7qqc2r4ww';
+  'wasm1tq55myhl4w6jkvve4tfq2a5nkupp7k4h5emqpq5gwvzk0v3j3hvqhv7pae';
 
 // export const HOST_CONTRACT_ADDRESS =
 //   'wasm1ctnjk7an90lz5wjfvr3cf6x984a8cjnv8dpmztmlpcq4xteaa2xsfr3xd0';
@@ -129,6 +129,15 @@ export default class Ward {
     }
   }
 
+  static async hasAccount() {
+    const addr = await Ward.getLocalAddress();
+    return addr != null;
+  }
+
+  static async getLocalAddress() {
+    return getKey('__WARD_default_address');
+  }
+
   async getLocalAddress() {
     if (!this._address) {
       this._address = await getKey('__WARD_default_address');
@@ -178,6 +187,12 @@ export default class Ward {
     if (typeof chain === 'undefined') throw new Error('Unknown chain.');
 
     return CosmWasmClient.connect(chain.rpc);
+  }
+
+  async getRecoveryState() {
+    const host = await this.getHostContract();
+    const client = await this.getClient(HOST_CHAIN.chainId);
+    return client.queryContractSmart(host, {get_recovery_pool: {}});
   }
 
   async getHostContract() {

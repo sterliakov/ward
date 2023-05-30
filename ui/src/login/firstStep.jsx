@@ -11,7 +11,16 @@ export default class FirstStep extends React.Component {
   state = {
     password: '',
     error: null,
+    hasAccount: false,
   };
+
+  componentDidMount() {
+    console.log('Did mount');
+    Ward.hasAccount().then((hasAccount) => {
+      console.log('hasAccount', hasAccount);
+      this.setState({hasAccount});
+    });
+  }
 
   async handleSubmit(ev) {
     ev.preventDefault();
@@ -43,25 +52,26 @@ export default class FirstStep extends React.Component {
                 style={{gridTemplateColumns: '100%', rowGap: '6px'}}
               >
                 {/*TODO: floating label */}
-                <Form.Group className="mb-3" controlId="formBasicPassword">
-                  <Form.Label>Password</Form.Label>
-                  <Form.Control
-                    autoFocus
-                    type="password"
-                    autoComplete="password"
-                    placeholder="Password"
-                    value={this.state.password}
-                    onChange={(ev) =>
-                      this.setState({password: ev.target.value})
-                    }
-                  />
-                </Form.Group>
-                {this.state.error && (
-                  <Alert variant="danger">{this.state.error}</Alert>
+                {this.state.hasAccount && (
+                  <>
+                    <Form.Group className="mb-3" controlId="formBasicPassword">
+                      <Form.Label>Password</Form.Label>
+                      <Form.Control
+                        autoFocus
+                        type="password"
+                        autoComplete="password"
+                        placeholder="Password"
+                        value={this.state.password}
+                        onChange={(ev) =>
+                          this.setState({password: ev.target.value})
+                        }
+                      />
+                    </Form.Group>
+                    <Button variant="primary" type="submit">
+                      Unlock
+                    </Button>
+                  </>
                 )}
-                <Button variant="primary" type="submit">
-                  Unlock
-                </Button>
                 <Button
                   variant="secondary"
                   type="button"
@@ -69,6 +79,9 @@ export default class FirstStep extends React.Component {
                 >
                   New account
                 </Button>
+                {this.state.error && (
+                  <Alert variant="danger">{this.state.error}</Alert>
+                )}
               </div>
             </Form>
           </Col>

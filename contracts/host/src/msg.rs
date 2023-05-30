@@ -22,14 +22,17 @@ pub enum ExecuteMsg {
     RegisterSlave { chain: String, addr: Addr },
     ExecuteSameChain { body_proxy: CosmosMsg },
     BeginSocialRecovery { target_addr: Addr },
-    ApproveSocialRecovery {},
+    ApproveSocialRecovery { target_addr: Addr },
     BeginTransferOwnership { target_addr: Addr },
-    ApproveTransferOwnership {},
+    ApproveTransferOwnership { target_addr: Addr },
 }
 
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
+    #[returns(GetRecoveryPoolResponse)]
+    GetRecoveryPool {},
+
     #[returns(GetSlavesResponse)]
     GetSlaves {},
 
@@ -37,6 +40,15 @@ pub enum QueryMsg {
     GetSlave { chain: String },
 }
 
+#[cw_serde]
+pub struct GetRecoveryPoolResponse {
+    pub members: Vec<Addr>,
+    pub recovery_approvals_count: u32,
+    pub transfer_approvals_count: u32,
+    pub recovery_progress: u32,
+    pub recovery_method: Option<String>,
+    pub new_owner: Option<Addr>,
+}
 #[cw_serde]
 pub struct GetSlavesResponse {
     pub slaves: HashMap<String, Addr>,

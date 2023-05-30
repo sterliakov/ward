@@ -32,4 +32,7 @@ pub enum ContractError {
 
     #[error("The requested process was not initiated yet.")]
     NotInProgress {},
+
+    #[error("{0}")]
+    InvariantMismatch(String),
 }

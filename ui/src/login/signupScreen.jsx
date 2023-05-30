@@ -109,7 +109,7 @@ export class NewAccountScreen extends React.Component {
     const recoveryPool = this.state.recoveryPool
       .split('\n')
       .filter((a) => a.length);
-    if (recoveryPool.some((a) => !a.startsWith('inj'))) {
+    if (recoveryPool.some((a) => !a.startsWith(HOST_CHAIN.prefix))) {
       this.setState({
         error: 'Please make sure that all addresses use proper format.',
       });
