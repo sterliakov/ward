@@ -8,7 +8,6 @@ pub struct InstantiateMsg {
 }
 
 #[cw_serde]
-pub struct HostRegisterSlaveMsg {
-    pub chain: String,
-    pub addr: Addr,
+pub enum HostRegisterSlaveMsg {
+    RegisterSlave { chain: String, addr: Addr },
 }

@@ -20,7 +20,6 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 #[repr(u8)]
 enum ReplyKind {
     ReplyCreateHost = 1,
-    ReplyCreateSlave = 2,
 }
 
 impl std::convert::TryFrom<u64> for ReplyKind {
@@ -29,7 +28,6 @@ impl std::convert::TryFrom<u64> for ReplyKind {
     fn try_from(value: u64) -> Result<Self, Self::Error> {
         match value {
             1 => Ok(Self::ReplyCreateHost),
-            2 => Ok(Self::ReplyCreateSlave),
             _ => Err("Unknown"),
         }
     }
@@ -91,7 +89,6 @@ pub fn execute(
                     })?,
                     funds: vec![],
                     label: info.sender.to_string(),
-                    // salt: info.sender.into(),
                 },
                 ReplyKind::ReplyCreateHost as u64,
             );
@@ -102,23 +99,34 @@ pub fn execute(
         }
         ExecuteMsg::CreateSlave { host_address, slave_chain } => {
             if slave_chain == state.host_chain {
-                let msg = WasmMsg::Instantiate2 {
+                let msg = WasmMsg::Instantiate {
                     admin: None,
-                    code_id: SLAVES.load(deps.storage, slave_chain)?,
+                    code_id: SLAVES
+                        .load(deps.storage, slave_chain.clone())?,
                     msg: to_binary(&SlaveInstantiateMsg {
-                        host: host_address,
+                        owner: host_address,
+                        chain: slave_chain,
                     })?,
                     funds: vec![],
-                    label: "".to_string(),
-                    salt: b"".into(),
+                    label: info.sender.to_string(),
                 };
-                // let submsg = SubMsg::reply_on_success(msg, ReplyKind::ReplyCreateSlave as u64);
                 Ok(Response::new()
                     .add_attribute("contract", "master")
                     .add_attribute("method", "add_slave")
                     .add_message(msg))
             } else {
                 Err(ContractError::NotImplemented("No IBC yet".to_string()))
+            }
+        }
+        ExecuteMsg::UpdateOwner { old_owner, new_owner } => {
+            let wallet = WALLETS.load(deps.storage, old_owner)?;
+            if wallet != info.sender {
+                Err(ContractError::Unauthorized {})
+            } else {
+                WALLETS.save(deps.storage, new_owner, &wallet)?;
+                Ok(Response::new()
+                    .add_attribute("contract", "master")
+                    .add_attribute("method", "update_owner"))
             }
         }
     }
@@ -187,9 +195,6 @@ pub fn reply(
                 Err(ContractError::Generic("Failed".to_string()))
             }
         }
-        _ => panic!("Should not happen"),
-        // ReplyKind::ReplyCreateSlave => {
-        // },
     }
 }
 

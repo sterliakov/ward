@@ -7,7 +7,9 @@ use cw2::set_contract_version;
 use itertools::Itertools;
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, GetCountResponse, InstantiateMsg, QueryMsg};
+use crate::msg::{
+    ExecuteMsg, GetCountResponse, InstantiateMsg, MasterMsg, QueryMsg,
+};
 use crate::state::{State, ACTIVE_RECOVERY, SLAVES, STATE};
 
 // version info for migration info
@@ -189,7 +191,9 @@ mod execute {
         addr: Addr,
     ) -> Result<Response, ContractError> {
         let state = STATE.load(deps.storage)?;
-        require_owner!(info, state);
+        if info.sender != addr {
+            return Err(ContractError::Unauthorized {});
+        }
         SLAVES.save(
             deps.storage,
             chain.clone(),
@@ -250,20 +254,28 @@ mod execute {
         deps: DepsMut,
     ) -> Result<Response, ContractError> {
         let state = STATE.load(deps.storage)?;
+        let old_owner = state.owner.clone();
         if let Some(new_owner) = state.potential_owner {
             STATE.update(
                 deps.storage,
                 |mut state| -> Result<_, ContractError> {
-                    state.owner = new_owner;
+                    state.owner = new_owner.clone();
                     state.potential_owner = None;
                     Ok(state)
                 },
             )?;
             while let Ok(Some(_)) = ACTIVE_RECOVERY.pop_back(deps.storage) {}
-            // TODO: update master contract too
             Ok(Response::new()
                 .add_attribute("contract", "host")
-                .add_attribute("method", "do_transfer_ownership"))
+                .add_attribute("method", "do_transfer_ownership")
+                .add_message(WasmMsg::Execute {
+                    contract_addr: state.master.to_string(),
+                    msg: to_binary(&MasterMsg::UpdateOwner {
+                        new_owner,
+                        old_owner,
+                    })?,
+                    funds: vec![],
+                }))
         } else {
             panic!("Impossible situation: no new owner during recovery");
         }

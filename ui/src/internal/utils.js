@@ -9,12 +9,8 @@ export function highlightJSON(json) {
     function (match) {
       var cls = 'number';
       if (/^"/.test(match)) {
-        if (/:$/.test(match)) {
-          cls = 'key';
-        }
-        else {
-          cls = 'string';
-        }
+        if (/:$/.test(match)) cls = 'key';
+        else cls = 'string';
       }
       else if (/true|false/.test(match)) {
         cls = 'boolean';

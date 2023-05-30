@@ -30,7 +30,7 @@ pub fn instantiate(
         .add_attribute("owner", msg.owner.clone())
         .add_message(WasmMsg::Execute {
             contract_addr: msg.owner.to_string(),
-            msg: to_binary(&HostRegisterSlaveMsg {
+            msg: to_binary(&HostRegisterSlaveMsg::RegisterSlave {
                 chain: msg.chain,
                 addr: env.contract.address.clone(),
             })?,

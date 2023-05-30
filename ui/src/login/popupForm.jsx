@@ -4,6 +4,7 @@ import init from '../content/init';
 import {DEBUG} from '../internal/ward';
 import AccountScreen from './accountScreen';
 import FirstStep from './firstStep';
+import SignupScreen from './signupScreen';
 
 export default class PopupForm extends React.Component {
   state = {
@@ -20,10 +21,13 @@ export default class PopupForm extends React.Component {
         {this.state.step === 'start' && (
           <FirstStep
             continueUnlocked={() => this.setState({step: 'balances'})}
-            beginCreateNew={() => alert('Not implemented')}
+            beginCreateNew={() => this.setState({step: 'signup'})}
           />
         )}
         {this.state.step === 'balances' && <AccountScreen />}
+        {this.state.step === 'signup' && (
+          <SignupScreen back={() => this.setState({step: 'start'})} />
+        )}
       </>
     );
   }

@@ -22,6 +22,10 @@ pub enum ExecuteMsg {
         host_address: Addr,
         slave_chain: String,
     },
+    UpdateOwner {
+        old_owner: Addr,
+        new_owner: Addr,
+    },
 }
 
 #[cw_serde]
@@ -35,5 +39,9 @@ pub struct HostInstantiateMsg {
 
 #[cw_serde]
 pub struct SlaveInstantiateMsg {
-    pub host: Addr,
+    pub owner: Addr,
+    pub chain: String,
 }
+
+// TODO: get rid of this shitty "recommended" layout
+// All messages should go to a separate crate for reusability, now it sucks.

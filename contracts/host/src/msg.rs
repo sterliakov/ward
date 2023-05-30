@@ -32,7 +32,11 @@ pub enum QueryMsg {
     GetCount {},
 }
 
-// We define a custom struct for each query response
+#[cw_serde]
+pub enum MasterMsg {
+    UpdateOwner { old_owner: Addr, new_owner: Addr },
+}
+
 #[cw_serde]
 pub struct GetCountResponse {
     pub count: i32,

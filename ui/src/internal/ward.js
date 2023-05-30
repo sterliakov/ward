@@ -23,9 +23,9 @@ import {MsgExecuteContract} from 'cosmjs-types/cosmwasm/wasm/v1/tx.js';
 
 // ================
 
-const EXECUTE_MSG_TYPE_URL = '/cosmwasm.wasm.v1.MsgExecuteContract';
+export const EXECUTE_MSG_TYPE_URL = '/cosmwasm.wasm.v1.MsgExecuteContract';
 
-const HOST_CHAIN = {
+export const HOST_CHAIN = {
   rpc: 'http://localhost:26657/',
   chainId: 'foo-1',
   prefix: 'wasm',
@@ -37,7 +37,7 @@ const HOST_CHAIN = {
     },
   ],
 };
-const SLAVE_CHAINS = {
+export const SLAVE_CHAINS = {
   'foo-1': {
     rpc: 'http://localhost:26657/',
     prefix: 'wasm',
@@ -51,9 +51,12 @@ const SLAVE_CHAINS = {
     ],
   },
 };
-const HOST_CONTRACT_ADDRESS =
+export const FACTORY_CONTRACT_ADDRESS =
+  'wasm17a7mlm84taqmd3enrpcxhrwzclj9pga8efz83vrswnnywr8tv26sapqg8f';
+
+export const HOST_CONTRACT_ADDRESS =
   'wasm1ctnjk7an90lz5wjfvr3cf6x984a8cjnv8dpmztmlpcq4xteaa2xsfr3xd0';
-const SLAVE_ADDRESSES = {
+export const SLAVE_ADDRESSES = {
   'foo-1': 'wasm14xc5dkz0rn8j99lxz69mkv3wzawmadg7xurkzy49m9yefmqx5c6sv5vy55',
 };
 
@@ -101,6 +104,12 @@ export async function setKey(key, value) {
 }
 
 export default class Ward {
+  static async validateMnemonic(mnemonic, opts = {}) {
+    const wallet = await DirectSecp256k1HdWallet.fromMnemonic(mnemonic, opts);
+    const {address} = (await wallet.getAccounts())[0];
+    return address;
+  }
+
   static async createFromMnemonic(mnemonic, ourPassword, opts = {}) {
     const wallet = await DirectSecp256k1HdWallet.fromMnemonic(mnemonic, opts);
     const stored = await wallet.serialize(ourPassword);
@@ -112,37 +121,6 @@ export default class Ward {
   static getFullDenom(denomName, chainId) {
     for (const d of SLAVE_CHAINS[chainId].denoms) {
       if (d.coinDenom === denomName) return d;
-    }
-  }
-
-  prepareAminoSignDoc(signDoc, chainId, localAddr) {
-    if (chainId === HOST_CHAIN.chainId) {
-      if (signDoc.msgs.length !== 1) {
-        throw new Error('Single message only allowed.');
-      }
-
-      return {
-        ...signDoc,
-        msgs: [
-          {
-            typeUrl: EXECUTE_MSG_TYPE_URL,
-            value: {
-              sender: localAddr,
-              contract: HOST_CONTRACT_ADDRESS,
-              msg: {
-                execute_same_chain: {
-                  nonce: 1,
-                  body_proxy: signDoc.msgs[0],
-                },
-              },
-              funds: [],
-            },
-          },
-        ],
-      };
-    }
-    else {
-      throw new Error('IBC call not supported yet.');
     }
   }
 
@@ -188,9 +166,8 @@ export default class Ward {
 
   async getClient(chainId) {
     const chain = SLAVE_CHAINS[chainId];
-    if (typeof chain === 'undefined') {
-      throw new Error('Unknown chain.');
-    }
+    if (typeof chain === 'undefined') throw new Error('Unknown chain.');
+
     return CosmWasmClient.connect(chain.rpc);
   }
 
@@ -249,6 +226,7 @@ export default class Ward {
     if (address) {
       throw new Error('Not implemented: only single account allowed now.');
     }
+
     return SLAVE_ADDRESSES[chainId];
   }
 
@@ -299,6 +277,24 @@ export default class Ward {
     };
   }
 
+  async signSimpleAsSelf(chainId, msg, fee, memo, password) {
+    const wallet = await this.getWallet(password);
+    const account = (await wallet.getAccountsWithPrivkeys())[0];
+    const offline = await this.makeOfflineClient(password);
+
+    const {accountNumber, sequence} = await this.getSequence(
+      chainId,
+      account.address,
+    );
+    return offline.signDirect(
+      account.address,
+      [msg],
+      fee,
+      memo,
+      {accountNumber, sequence, chainId},
+    );
+  }
+
   async signSimple(chainId, msg, fee, memo, password, accountData = null) {
     const wallet = await this.getWallet(password);
     const account = (await wallet.getAccountsWithPrivkeys())[0];
@@ -334,15 +330,14 @@ export default class Ward {
     else if (mode === 'amino') {
       return this.signAmino(signerAddress, signDoc, password);
     }
-    else {
-      throw new Error('Unknown sign mode.');
-    }
+    else throw new Error('Unknown sign mode.');
   }
 
   addressToChainId(signerAddress) {
     for (const [chainId, addr] of Object.entries(SLAVE_ADDRESSES)) {
       if (addr === signerAddress) return chainId;
     }
+
     throw new Error(`Address ${signerAddress} not found in wallet`);
   }
 
