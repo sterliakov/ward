@@ -1,3 +1,5 @@
+@use 'sass:color';
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -26,4 +28,30 @@ pre.pretty-json {
   .key { color: red; }
 }
 
+.popup-root {
+  overflow-y: auto;
+}
+
+.form-control::placeholder {
+  color: #555;
+}
+
+$body-bg: color.adjust(#7A72D3, $lightness: 20%);
+$light: #f7fdba;
+$success: #5d9ffb;
+$theme-colors: (
+  "primary": #01412f,
+  "secondary": #207050,
+  "danger": #ff4f3f,
+  "success": $success,
+  "light": $light,
+);
+$nav-link-color: $light;
+$nav-link-hover-color: color.adjust($success, $lightness: -40%);
+$component-active-bg: $success;
+
 @import "~bootstrap/scss/bootstrap";
+
+#root {
+  overflow: hidden;
+}

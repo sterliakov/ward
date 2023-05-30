@@ -4,12 +4,7 @@
   "short_name": "Ward",
   "name": "Ward Wallet",
   "icons": {
-    "16": "favicon-1.png",
-    "24": "favicon-2.png",
-    "32": "favicon-3.png",
-    "64": "favicon-4.png",
-    "192": "logo192.png",
-    "512": "logo512.png"
+    "48": "favicon.png"
   },
   "permissions": ["activeTab", "storage", "tabs"],
   "content_scripts": [

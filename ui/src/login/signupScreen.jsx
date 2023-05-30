@@ -237,17 +237,21 @@ export class NewAccountScreen extends React.Component {
                 <Form onSubmit={this.submitFirstPage.bind(this)}>
                   <div
                     className="d-grid"
-                    style={{gridTemplateColumns: '100%', rowGap: '6px'}}
+                    style={{gridTemplateColumns: '100%', rowGap: '12px'}}
                   >
                     <Button
-                      variant="outline-dark"
+                      variant="outline-light"
                       type="button"
                       onClick={this.genMnemonic.bind(this)}
                     >
                       <span className="pe-3">Generate</span>
                       <ArrowClockwise />
                     </Button>
-                    <FloatingLabel label="Mnemonic" controlId="create-mnemonic">
+                    <FloatingLabel
+                      className="mb-3"
+                      label="Mnemonic"
+                      controlId="create-mnemonic"
+                    >
                       <Form.Control
                         as="textarea"
                         className="h-auto"
@@ -259,11 +263,7 @@ export class NewAccountScreen extends React.Component {
                       />
                     </FloatingLabel>
 
-                    <FloatingLabel
-                      className="mb-3"
-                      label="Password"
-                      controlId="create-password"
-                    >
+                    <FloatingLabel label="Password" controlId="create-password">
                       <Form.Control
                         type="password"
                         autoComplete="new-password"
@@ -314,7 +314,7 @@ export class NewAccountScreen extends React.Component {
                 </div>
               </Col>
             </Row>
-            <Row className="py-3">
+            <Row className="py-3 h-100">
               <Col>
                 <Form onSubmit={this.submitSecondPage.bind(this)}>
                   <div
@@ -333,7 +333,7 @@ export class NewAccountScreen extends React.Component {
                       />
                     </FloatingLabel>
 
-                    <Form.Text>
+                    <Form.Text className="text-light">
                       You will need some $INJ on your balance to cover
                       deployment fees.
                     </Form.Text>
@@ -357,7 +357,7 @@ export class NewAccountScreen extends React.Component {
                           this.setState({recoveryPool: ev.target.value})
                         }
                       />
-                      <Form.Text muted>
+                      <Form.Text className="text-light">
                         Enter Injective addresses separated by newlines.
                       </Form.Text>
                     </FloatingLabel>
@@ -407,6 +407,7 @@ export class NewAccountScreen extends React.Component {
                       controlId="create-chains"
                     >
                       <Form.Control
+                        className="h-100"
                         as="select"
                         multiple
                         value={this.state.selectedChains}

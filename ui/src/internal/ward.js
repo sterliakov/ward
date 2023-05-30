@@ -266,11 +266,13 @@ export default class Ward {
   }
 
   async getAllBalances() {
+    const slaves = await this.getSlaveContracts();
     return Promise.all(
       Object.entries(SLAVE_CHAINS).map(
         async ([chainId, {rpc, name, denoms}]) => ({
           chainId,
           name,
+          address: slaves[chainId],
           balances: await Promise.all(
             denoms.map(async (denom) =>
               this.getBalance(chainId, denom.coinDenom),

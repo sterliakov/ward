@@ -27,9 +27,10 @@ export class BalanceRow extends React.Component {
     return (
       <Button
         onClick={() => this.props.openTransferScreen(denom)}
-        className="fs-4"
+        className="fs-4 my-1"
         disabled={amount <= 0}
         variant={amount > 0 ? 'success' : 'secondary'}
+        title={`Transfer ${denom}`}
       >
         {amount}
         <span className="ps-2 text-uppercase">{denom}</span>
@@ -204,7 +205,7 @@ export class TransferScreen extends React.Component {
                 <Button
                   variant="primary"
                   type="submit"
-                  disabled={this.state.inProgress}
+                  disabled={this.state.inProgress || this.state.txHash}
                 >
                   {this.state.inProgress ? (
                     <Spinner animation="border" variant="light" />
@@ -244,45 +245,61 @@ export class AccountState extends React.Component {
 
   render() {
     return (
-      <div>
-        {this.state.error && <Alert variant="danger">{this.state.error}</Alert>}
-        <h6 className="py-3">Available Balances:</h6>
-        <Tab.Container id="balance-tabs" defaultActiveKey={0}>
-          <Row>
-            <Col xs={3}>
-              <Nav variant="pills" className="flex-column">
-                {this.state.balances.map((chain, i) => (
-                  <Nav.Item key={i}>
-                    <Nav.Link eventKey={i}>{chain.name}</Nav.Link>
-                  </Nav.Item>
-                ))}
-              </Nav>
-            </Col>
-            <Col xs={9}>
-              <Tab.Content>
-                {this.state.balances.map((chain, i) => (
-                  <Tab.Pane key={i} eventKey={i}>
-                    {chain.balances.map(({denom, amount}) => (
-                      <BalanceRow
-                        key={i}
-                        denom={denom}
-                        amount={amount}
-                        openTransferScreen={(denom) =>
-                          this.props.openTransferScreen(denom, chain.chainId)
-                        }
-                      />
-                    ))}
-                  </Tab.Pane>
-                ))}
-              </Tab.Content>
-            </Col>
-          </Row>
-        </Tab.Container>
-
-        <hr />
-
+      <div className="h-100 d-flex flex-column justify-content-between">
+        <div>
+          {this.state.error && (
+            <Alert variant="danger">{this.state.error}</Alert>
+          )}
+          <h1 className="fs-3 pb-1 pt-3">Available Balances:</h1>
+          <Tab.Container id="balance-tabs" defaultActiveKey={0}>
+            <Row>
+              <Col xs={3}>
+                <Nav variant="pills" className="flex-column">
+                  {this.state.balances.map((chain, i) => (
+                    <Nav.Item key={i}>
+                      <Nav.Link eventKey={i}>{chain.name}</Nav.Link>
+                    </Nav.Item>
+                  ))}
+                </Nav>
+              </Col>
+              <Col xs={9}>
+                <Tab.Content>
+                  {this.state.balances.map((chain, i) => (
+                    <Tab.Pane key={i} eventKey={i}>
+                      <div className="d-flex flex-column">
+                        <h3
+                          style={{overflow: 'hidden', textOverflow: 'ellipsis'}}
+                          className="fs-6"
+                          title={chain.address}
+                        >
+                          {chain.address}
+                        </h3>
+                        {chain.balances
+                          .toSorted((a, b) => b.amount - a.amount)
+                          .map(({denom, amount}) => (
+                            <BalanceRow
+                              key={i}
+                              denom={denom}
+                              amount={amount}
+                              openTransferScreen={(denom) =>
+                                this.props.openTransferScreen(
+                                  denom,
+                                  chain.chainId,
+                                )
+                              }
+                            />
+                          ))}
+                      </div>
+                    </Tab.Pane>
+                  ))}
+                </Tab.Content>
+              </Col>
+            </Row>
+          </Tab.Container>
+        </div>
         <Row>
-          <Col xs={6}>
+          <hr />
+          <div className="pb-3 d-flex justify-content-around">
             <Button
               variant="primary"
               type="button"
@@ -291,8 +308,6 @@ export class AccountState extends React.Component {
             >
               Manage own
             </Button>
-          </Col>
-          <Col xs={6}>
             <Button
               variant="secondary"
               type="button"
@@ -301,7 +316,7 @@ export class AccountState extends React.Component {
             >
               Manage other
             </Button>
-          </Col>
+          </div>
         </Row>
       </div>
     );
@@ -391,14 +406,6 @@ export class ManageOwnScreen extends MessageSender {
       recovery_method,
       new_owner,
     } = await this.ward.getRecoveryState();
-    console.log(
-      members,
-      recovery_approvals_count,
-      transfer_approvals_count,
-      recovery_progress,
-      recovery_method,
-      new_owner,
-    );
     this.setState({
       recoveryPool: members,
       transferInProgress: recovery_method != null,
@@ -448,7 +455,7 @@ export class ManageOwnScreen extends MessageSender {
 
   render() {
     return (
-      <div>
+      <div className="d-flex flex-column h-100">
         <Row className="py-3">
           <Col>
             <div className="d-flex justify-content-between align-items-center">
@@ -536,7 +543,7 @@ export class ManageOwnScreen extends MessageSender {
 
         <hr />
 
-        <Row className="align-items-center my-3">
+        <Row className="align-items-center">
           <Col xs={8}>
             <FloatingLabel
               label="Transfer ownership"
@@ -551,11 +558,12 @@ export class ManageOwnScreen extends MessageSender {
               />
             </FloatingLabel>
           </Col>
-          <Col xs={4}>
+          <Col xs={4} className="h-100 d-flex">
             <Button
               title="Transfer the wallet to another account"
               variant="danger"
               type="button"
+              className="w-100"
               onClick={this.transferOwnership.bind(this)}
               disabled={this.state.transferInProgress || this.state.inProgress}
             >
@@ -567,6 +575,8 @@ export class ManageOwnScreen extends MessageSender {
             </Button>
           </Col>
         </Row>
+
+        <div className="d-flex flex-grow-1"></div>
 
         <FloatingLabel
           className="mb-3"

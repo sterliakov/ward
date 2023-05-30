@@ -37,9 +37,13 @@ export default class FirstStep extends React.Component {
       <div className="h-100 d-flex flex-column justify-content-between">
         <Row className="py-3">
           <Col>
-            <h1 style={{fontSize: '3rem', textAlign: 'center'}}>
-              {this.state.hasAccount ? 'Welcome back!' : 'Welcome!'}
-            </h1>
+            <div className="mt-5 d-flex flex-column align-items-center">
+              <img src="square_big.jpg" width="156" className="my-2" />
+              <h1 style={{fontSize: '3rem', textAlign: 'center'}}>Ward</h1>
+              <h2 style={{fontSize: '1rem', textAlign: 'center'}}>
+                Bigger inside than it appears
+              </h2>
+            </div>
           </Col>
         </Row>
         <Row className="py-3">
@@ -62,6 +66,7 @@ export default class FirstStep extends React.Component {
                         type="password"
                         autoComplete="password"
                         placeholder="Password"
+                        style={{backgroundColor: '#709986'}}
                         value={this.state.password}
                         onChange={(ev) =>
                           this.setState({password: ev.target.value})
@@ -78,7 +83,7 @@ export default class FirstStep extends React.Component {
                   type="button"
                   onClick={this.props.beginCreateNew}
                 >
-                  New account
+                  New Account
                 </Button>
                 {this.state.error && (
                   <Alert variant="danger">{this.state.error}</Alert>
