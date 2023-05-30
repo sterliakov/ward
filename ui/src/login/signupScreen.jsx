@@ -64,6 +64,9 @@ export class NewAccountScreen extends React.Component {
     txHash: null,
     address: null,
     selectedChains: [],
+    recoveryPool: '',
+    recoveryApprovalsNeeded: 2,
+    rotationApprovalsNeeded: 1,
   };
 
   genMnemonic() {
@@ -103,6 +106,15 @@ export class NewAccountScreen extends React.Component {
       this.setState({error: 'Please select at least one chain!'});
       return;
     }
+    const recoveryPool = this.state.recoveryPool
+      .split('\n')
+      .filter((a) => a.length);
+    if (recoveryPool.some((a) => !a.startsWith('inj'))) {
+      this.setState({
+        error: 'Please make sure that all addresses use proper format.',
+      });
+      return;
+    }
 
     this.setState({inProgress: true, error: null});
     await Ward.createFromMnemonic(
@@ -113,6 +125,7 @@ export class NewAccountScreen extends React.Component {
     const ward = new Ward();
 
     const sendMessage = async (chainId, msg) => {
+      console.log(msg);
       const wrapped = {
         typeUrl: EXECUTE_MSG_TYPE_URL,
         value: {
@@ -141,13 +154,22 @@ export class NewAccountScreen extends React.Component {
           return logs;
         }
         catch (ex) {
-          this.setState({error: result?.rawLog ?? 'Broadcasting failed.'});
+          const exStr = ex.toString();
+          if (exStr.includes('Error parsing into type')) {
+            this.setState({
+              error:
+                'Creation failed. Please make sure that addresses are valid.',
+            });
+          }
+          else {
+            this.setState({error: result?.rawLog ?? 'Broadcasting failed.'});
+          }
+          ex.handled = true;
           throw ex;
         }
       }
       catch (ex) {
-        this.setState({error: ex.toString()});
-        throw ex;
+        if (!ex.handled) this.setState({error: ex.toString()});
       }
     };
 
@@ -155,10 +177,11 @@ export class NewAccountScreen extends React.Component {
       HOST_CHAIN.chainId,
       {
         create_host: {
-          recovery_pool: [],
-          approval_pool: [],
-          recovery_approvals_needed: 1,
-          transfer_ownership_approvals_needed: 1,
+          recovery_pool: recoveryPool,
+          approval_pool: [], // Unused for now
+          recovery_approvals_needed: this.state.recoveryApprovalsNeeded,
+          transfer_ownership_approvals_needed:
+            this.state.rotationApprovalsNeeded,
         },
       },
     );
@@ -211,11 +234,10 @@ export class NewAccountScreen extends React.Component {
                   >
                     <Button
                       variant="outline-dark"
-                      className="pe-3"
                       type="button"
                       onClick={this.genMnemonic.bind(this)}
                     >
-                      <span>Generate</span>
+                      <span className="pe-3">Generate</span>
                       <ArrowClockwise />
                     </Button>
                     <FloatingLabel label="Mnemonic" controlId="create-mnemonic">
@@ -308,6 +330,69 @@ export class NewAccountScreen extends React.Component {
                       You will need some $INJ on your balance to cover
                       deployment fees.
                     </Form.Text>
+
+                    <FloatingLabel
+                      label="Recovery pool"
+                      controlId="create-recovery-pool"
+                      title={
+                        'Enter wallet addresses of people you trust '
+                        + 'for social recovery purposes. '
+                        + 'You can adjust this list later.'
+                      }
+                    >
+                      <Form.Control
+                        as="textarea"
+                        className="h-auto"
+                        rows="3"
+                        value={this.state.recoveryPool}
+                        placeholder="inj1..."
+                        onChange={(ev) =>
+                          this.setState({recoveryPool: ev.target.value})
+                        }
+                      />
+                      <Form.Text muted>
+                        Enter Injective addresses separated by newlines.
+                      </Form.Text>
+                    </FloatingLabel>
+
+                    <Row>
+                      <Col xs={6}>
+                        <FloatingLabel
+                          label="Recovery approvals"
+                          controlId="create-recovery-approvals-num"
+                          title="Number of people signatured needed for social recovery"
+                        >
+                          <Form.Control
+                            type="number"
+                            min={1}
+                            value={this.state.recoveryApprovalsNeeded}
+                            onChange={(ev) =>
+                              this.setState({
+                                recoveryApprovalsNeeded: ev.target.value,
+                              })
+                            }
+                          />
+                        </FloatingLabel>
+                      </Col>
+                      <Col xs={6}>
+                        <FloatingLabel
+                          label="Rotation approvals"
+                          controlId="create-rotation-approvals-num"
+                          title="Number of people signatured needed for key rotation (owner-initiated)"
+                        >
+                          <Form.Control
+                            type="number"
+                            min={1}
+                            value={this.state.rotationApprovalsNeeded}
+                            onChange={(ev) =>
+                              this.setState({
+                                rotationApprovalsNeeded: ev.target.value,
+                              })
+                            }
+                          />
+                        </FloatingLabel>
+                      </Col>
+                    </Row>
 
                     <FloatingLabel
                       className="mb-3"

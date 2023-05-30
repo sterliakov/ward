@@ -120,7 +120,7 @@ export class TransferScreen extends React.Component {
                   <Form.Control
                     autoFocus
                     type="text"
-                    placeholder="wasm1..." // TODO: dynamic prefix
+                    placeholder="inj1..." // TODO: dynamic prefix
                     value={this.state.to}
                     onChange={(ev) => this.setState({to: ev.target.value})}
                   />
