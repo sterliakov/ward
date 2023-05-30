@@ -229,11 +229,14 @@ export class AccountState extends React.Component {
   };
 
   componentDidMount() {
-    this._asyncRequest = new Ward().getAllBalances().then((balances) => {
-      this._asyncRequest = null;
-      if (balances) this.setState({balances});
-      else this.setState({balances: [], error: 'Failed to fetch balances.'});
-    });
+    this._asyncRequest = new Ward()
+      .getAllBalances()
+      .then((balances) => {
+        this._asyncRequest = null;
+        if (balances) this.setState({balances});
+        else this.setState({balances: [], error: 'Failed to fetch balances.'});
+      })
+      .catch((ex) => this.setState({error: ex.toString()}));
   }
   componentWillUnmount() {
     if (this._asyncRequest) this._asyncRequest.cancel();
@@ -305,50 +308,9 @@ export class AccountState extends React.Component {
   }
 }
 
-export class ManageOwnScreen extends React.Component {
-  state = {
-    recoveryPool: [],
-    newRecoveryMember: '',
-    newOwner: '',
-    password: '',
-    error: null,
-    txHash: null,
-    inProgress: false,
-    transferInProgress: true,
-  };
-
-  constructor(props) {
-    super(props);
-    this.ward = new Ward();
-  }
-
-  async componentDidMount() {
-    const {
-      members,
-      recovery_approvals_count,
-      transfer_approvals_count,
-      recovery_progress,
-      recovery_method,
-      new_owner,
-    } = await this.ward.getRecoveryState();
-    console.log(
-      members,
-      recovery_approvals_count,
-      transfer_approvals_count,
-      recovery_progress,
-      recovery_method,
-      new_owner,
-    );
-    this.setState({
-      recoveryPool: members,
-      transferInProgress: recovery_method != null,
-      newOwner: new_owner || '',
-    });
-  }
-
+export class MessageSender extends React.Component {
   async sendMessage(msg) {
     const {chainId} = HOST_CHAIN;
-    console.log(msg);
     const wrapped = {
       typeUrl: EXECUTE_MSG_TYPE_URL,
       value: {
@@ -400,6 +362,48 @@ export class ManageOwnScreen extends React.Component {
       this.setState({error: 'Please fill in your password.'});
       return true;
     }
+  }
+}
+
+export class ManageOwnScreen extends MessageSender {
+  state = {
+    recoveryPool: [],
+    newRecoveryMember: '',
+    newOwner: '',
+    password: '',
+    error: null,
+    txHash: null,
+    inProgress: false,
+    transferInProgress: true,
+  };
+
+  constructor(props) {
+    super(props);
+    this.ward = new Ward();
+  }
+
+  async componentDidMount() {
+    const {
+      members,
+      recovery_approvals_count,
+      transfer_approvals_count,
+      recovery_progress,
+      recovery_method,
+      new_owner,
+    } = await this.ward.getRecoveryState();
+    console.log(
+      members,
+      recovery_approvals_count,
+      transfer_approvals_count,
+      recovery_progress,
+      recovery_method,
+      new_owner,
+    );
+    this.setState({
+      recoveryPool: members,
+      transferInProgress: recovery_method != null,
+      newOwner: new_owner || '',
+    });
   }
 
   async saveRecoveryMember() {
@@ -539,7 +543,6 @@ export class ManageOwnScreen extends React.Component {
               controlId="transfer-destination"
             >
               <Form.Control
-                autoFocus
                 type="text"
                 placeholder={`${HOST_CHAIN.prefix}1...`}
                 value={this.state.newOwner}
@@ -590,6 +593,141 @@ export class ManageOwnScreen extends React.Component {
   }
 }
 
+export class ManageOtherScreen extends MessageSender {
+  state = {
+    newOwner: '',
+    oldOwner: '',
+    recoveryMethod: 'begin_social_recovery',
+    password: '',
+    error: null,
+    txHash: null,
+    inProgress: false,
+  };
+
+  constructor(props) {
+    super(props);
+    this.ward = new Ward();
+  }
+
+  async handleSubmit(ev) {
+    ev.preventDefault();
+    if (this.requirePassword()) return;
+    this.setState({error: null, inProgress: true});
+    try {
+      await this.sendMessage({
+        [this.state.recoveryMethod]: {target_addr: this.state.newOwner},
+      });
+    }
+    catch (ex) {
+      return;
+    }
+    this.props.back();
+  }
+
+  render() {
+    return (
+      <div>
+        <Row className="py-3">
+          <Col>
+            <div className="d-flex justify-content-between align-items-center">
+              <h1 className="fs-5" style={{textAlign: 'center'}}>
+                Manage other account
+              </h1>
+              <Button variant="secondary" onClick={this.props.back}>
+                Back
+              </Button>
+            </div>
+          </Col>
+        </Row>
+        <Form
+          onSubmit={this.handleSubmit.bind(this)}
+          className="d-grid"
+          style={{gridTemplateColumns: '100%', rowGap: '1rem'}}
+        >
+          <FloatingLabel
+            label="Recovery action"
+            controlId="manage-other-method"
+          >
+            <Form.Select
+              type="text"
+              placeholder={`${HOST_CHAIN.prefix}1...`}
+              value={this.state.recoveryMethod}
+              onChange={(ev) =>
+                this.setState({recoveryMethod: ev.target.value})
+              }
+            >
+              <option value="begin_social_recovery">
+                Begin social recovery
+              </option>
+              <option value="approve_social_recovery">
+                Approve social recovery
+              </option>
+              <option value="approve_transfer_ownership">
+                Approve ownership transfer
+              </option>
+            </Form.Select>
+          </FloatingLabel>
+
+          <FloatingLabel label="Current owner" controlId="manage-other-source">
+            <Form.Control
+              type="text"
+              placeholder={`${HOST_CHAIN.prefix}1...`}
+              value={this.state.oldOwner}
+              onChange={(ev) => this.setState({oldOwner: ev.target.value})}
+            />
+          </FloatingLabel>
+
+          <FloatingLabel
+            label="Transfer beneficiary"
+            controlId="manage-other-destination"
+          >
+            <Form.Control
+              type="text"
+              placeholder={`${HOST_CHAIN.prefix}1...`}
+              value={this.state.newOwner}
+              onChange={(ev) => this.setState({newOwner: ev.target.value})}
+            />
+          </FloatingLabel>
+
+          <FloatingLabel
+            className="mb-3"
+            label="Password"
+            controlId="manage-other-password"
+          >
+            <Form.Control
+              type="password"
+              autoComplete="current-password"
+              placeholder="Password"
+              value={this.state.password}
+              onChange={(ev) => this.setState({password: ev.target.value})}
+            />
+          </FloatingLabel>
+          {this.state.error && (
+            <Alert variant="danger">{this.state.error}</Alert>
+          )}
+          {this.state.txHash && (
+            <Alert variant="success">
+              <Alert.Heading>Transaction sent!</Alert.Heading>
+              <span style={{fontSize: '0.55rem'}}>{this.state.txHash}</span>
+            </Alert>
+          )}
+          <Button
+            variant="primary"
+            type="submit"
+            disabled={this.state.inProgress}
+          >
+            {this.state.inProgress ? (
+              <Spinner animation="border" variant="light" />
+            ) : (
+              'Sign and Broadcast'
+            )}
+          </Button>
+        </Form>
+      </div>
+    );
+  }
+}
+
 export default class AccountScreen extends React.Component {
   state = {
     step: 'balances',
@@ -618,6 +756,9 @@ export default class AccountScreen extends React.Component {
         )}
         {this.state.step === 'manageOwn' && (
           <ManageOwnScreen back={() => this.setState({step: 'balances'})} />
+        )}
+        {this.state.step === 'manageOther' && (
+          <ManageOtherScreen back={() => this.setState({step: 'balances'})} />
         )}
       </>
     );

@@ -52,7 +52,7 @@ export const SLAVE_CHAINS = {
   },
 };
 export const FACTORY_CONTRACT_ADDRESS =
-  'wasm1tq55myhl4w6jkvve4tfq2a5nkupp7k4h5emqpq5gwvzk0v3j3hvqhv7pae';
+  'wasm1p3nekml39axny2z2up30vpa05wqx5pxtxex9dd4277mmjsgergcql4zg7x';
 
 // export const HOST_CONTRACT_ADDRESS =
 //   'wasm1ctnjk7an90lz5wjfvr3cf6x984a8cjnv8dpmztmlpcq4xteaa2xsfr3xd0';
@@ -107,6 +107,7 @@ export default class Ward {
   constructor() {
     this._address = null;
     this._hostContract = null;
+    this._slaveContracts = null;
   }
 
   static async validateMnemonic(mnemonic, opts = {}) {
@@ -131,7 +132,7 @@ export default class Ward {
 
   static async hasAccount() {
     const addr = await Ward.getLocalAddress();
-    return addr != null;
+    return addr != null && new Ward().getHostContract();
   }
 
   static async getLocalAddress() {
@@ -181,12 +182,15 @@ export default class Ward {
     }
   }
 
-  async getClient(chainId) {
+  static async getClient(chainId) {
     const chain =
       chainId === HOST_CHAIN.chainId ? HOST_CHAIN : SLAVE_CHAINS[chainId];
     if (typeof chain === 'undefined') throw new Error('Unknown chain.');
 
     return CosmWasmClient.connect(chain.rpc);
+  }
+  async getClient(chainId) {
+    return Ward.getClient(chainId);
   }
 
   async getRecoveryState() {
@@ -215,6 +219,15 @@ export default class Ward {
       this._slaveContracts = response.slaves;
     }
     return this._slaveContracts;
+  }
+
+  static async getHostContract(owner) {
+    const client = await Ward.getClient(HOST_CHAIN.chainId);
+    const response = await client.queryContractSmart(
+      FACTORY_CONTRACT_ADDRESS,
+      {get_host_contract: {owner}},
+    );
+    return response.host;
   }
 
   async getSequence(chainId, address) {

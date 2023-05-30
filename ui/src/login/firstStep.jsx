@@ -2,6 +2,7 @@ import React from 'react';
 import Alert from 'react-bootstrap/Alert';
 import Button from 'react-bootstrap/Button';
 import Col from 'react-bootstrap/Col';
+import FloatingLabel from 'react-bootstrap/FloatingLabel';
 import Form from 'react-bootstrap/Form';
 import Row from 'react-bootstrap/Row';
 
@@ -14,12 +15,9 @@ export default class FirstStep extends React.Component {
     hasAccount: false,
   };
 
-  componentDidMount() {
-    console.log('Did mount');
-    Ward.hasAccount().then((hasAccount) => {
-      console.log('hasAccount', hasAccount);
-      this.setState({hasAccount});
-    });
+  async componentDidMount() {
+    const hasAccount = await Ward.hasAccount();
+    this.setState({hasAccount});
   }
 
   async handleSubmit(ev) {
@@ -40,7 +38,7 @@ export default class FirstStep extends React.Component {
         <Row className="py-3">
           <Col>
             <h1 style={{fontSize: '3rem', textAlign: 'center'}}>
-              Welcome back!
+              {this.state.hasAccount ? 'Welcome back!' : 'Welcome!'}
             </h1>
           </Col>
         </Row>
@@ -54,8 +52,11 @@ export default class FirstStep extends React.Component {
                 {/*TODO: floating label */}
                 {this.state.hasAccount && (
                   <>
-                    <Form.Group className="mb-3" controlId="formBasicPassword">
-                      <Form.Label>Password</Form.Label>
+                    <FloatingLabel
+                      label="Password"
+                      className="mb-3"
+                      controlId="formBasicPassword"
+                    >
                       <Form.Control
                         autoFocus
                         type="password"
@@ -66,7 +67,7 @@ export default class FirstStep extends React.Component {
                           this.setState({password: ev.target.value})
                         }
                       />
-                    </Form.Group>
+                    </FloatingLabel>
                     <Button variant="primary" type="submit">
                       Unlock
                     </Button>

@@ -302,7 +302,7 @@ mod execute {
 
         if can_transfer_ownership(&deps, method)? {
             // Maybe some idiot allows one approval
-            do_transfer_ownership(deps)?;
+            return do_transfer_ownership(deps);
         }
 
         Ok(Response::new()
@@ -359,7 +359,7 @@ mod execute {
         ACTIVE_RECOVERY.push_back(deps.storage, &info.sender)?;
 
         if can_transfer_ownership(&deps, method)? {
-            do_transfer_ownership(deps)?;
+            return do_transfer_ownership(deps);
         }
 
         Ok(Response::new()

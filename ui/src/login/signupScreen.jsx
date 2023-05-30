@@ -100,6 +100,53 @@ export class NewAccountScreen extends React.Component {
     else this.setState({step: 'deploy', address});
   }
 
+  async sendMessage(ward, chainId, msg) {
+    console.log(msg);
+    const wrapped = {
+      typeUrl: EXECUTE_MSG_TYPE_URL,
+      value: {
+        sender: this.state.address,
+        contract: FACTORY_CONTRACT_ADDRESS,
+        msg: toBinary(msg),
+        funds: [],
+      },
+    };
+    const fee = {amount: [], gas: '400000'};
+    const signed = await ward.signSimpleAsSelf(
+      chainId,
+      wrapped,
+      fee,
+      null,
+      this.state.password,
+    );
+    try {
+      const result = await ward.broadcastRaw(chainId, signed);
+      console.log(result);
+      try {
+        // If this succeeded, we're all set, transaction was sent.
+        // this.setState({txHash: result.transactionHash});
+        return JSON.parse(result.rawLog);
+      }
+      catch (ex) {
+        const exStr = ex.toString();
+        if (exStr.includes('Error parsing into type')) {
+          this.setState({
+            error:
+              'Creation failed. Please make sure that addresses are valid.',
+          });
+        }
+        else {
+          this.setState({error: result?.rawLog ?? 'Broadcasting failed.'});
+        }
+        ex.handled = true;
+        throw ex;
+      }
+    }
+    catch (ex) {
+      if (!ex.handled) this.setState({error: ex.toString()});
+    }
+  }
+
   async submitSecondPage(ev) {
     ev.preventDefault();
     if (!this.state.selectedChains.length) {
@@ -124,54 +171,14 @@ export class NewAccountScreen extends React.Component {
     );
     const ward = new Ward();
 
-    const sendMessage = async (chainId, msg) => {
-      console.log(msg);
-      const wrapped = {
-        typeUrl: EXECUTE_MSG_TYPE_URL,
-        value: {
-          sender: this.state.address,
-          contract: FACTORY_CONTRACT_ADDRESS,
-          msg: toBinary(msg),
-          funds: [],
-        },
-      };
-      const fee = {amount: [], gas: '400000'};
-      const signed = await ward.signSimpleAsSelf(
-        chainId,
-        wrapped,
-        fee,
-        null,
-        this.state.password,
-      );
-      try {
-        const result = await ward.broadcastRaw(chainId, signed);
-        console.log(result);
-        try {
-          // If this succeeded, we're all set, transaction was sent.
-          // this.setState({txHash: result.transactionHash});
-          return JSON.parse(result.rawLog);
-        }
-        catch (ex) {
-          const exStr = ex.toString();
-          if (exStr.includes('Error parsing into type')) {
-            this.setState({
-              error:
-                'Creation failed. Please make sure that addresses are valid.',
-            });
-          }
-          else {
-            this.setState({error: result?.rawLog ?? 'Broadcasting failed.'});
-          }
-          ex.handled = true;
-          throw ex;
-        }
-      }
-      catch (ex) {
-        if (!ex.handled) this.setState({error: ex.toString()});
-      }
-    };
+    if (this.target === 'restore') {
+      const existing = ward.getHostContract();
+      if (!existing) this.setState({error: 'Account not found.'});
+      return;
+    }
 
-    const hostLog = await sendMessage(
+    const hostLog = await this.sendMessage(
+      ward,
       HOST_CHAIN.chainId,
       {
         create_host: {
@@ -193,7 +200,8 @@ export class NewAccountScreen extends React.Component {
 
     await Promise.all(
       Object.keys(SLAVE_CHAINS).map((chainId) =>
-        sendMessage(
+        this.sendMessage(
+          ward,
           chainId,
           {
             create_slave: {
@@ -292,7 +300,7 @@ export class NewAccountScreen extends React.Component {
             </Row>
           </div>
         )}
-        {this.state.step === 'deploy' && this.props.target === 'new' && (
+        {this.state.step === 'deploy' && (
           <div className="h-100 d-flex flex-column justify-content-between">
             <Row className="py-3">
               <Col>
@@ -473,8 +481,7 @@ export default class SignupScreen extends React.Component {
           <SignupStartScreen
             openNewScreen={() => this.setState({step: 'next', target: 'new'})}
             openRestoreScreen={() => {
-              alert('Not implemented');
-              // this.setState({step: 'next', target: 'restore'});
+              this.setState({step: 'next', target: 'restore'});
             }}
           />
         )}
