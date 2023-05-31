@@ -1,124 +1,21 @@
-import {encodeSecp256k1Signature, serializeSignDoc} from '@cosmjs/amino';
-import {
-  CosmWasmClient as OrigCosmWasmClient,
-  toBinary,
-} from '@cosmjs/cosmwasm-stargate';
-import {Secp256k1, sha256, stringToPath} from '@cosmjs/crypto';
-// test
-// ================
-import {fromBase64} from '@cosmjs/encoding';
-import {Uint64} from '@cosmjs/math';
-import {
-  DirectSecp256k1HdWallet,
-  Registry,
-  makeSignBytes,
-} from '@cosmjs/proto-signing';
+import {toBinary} from '@cosmjs/cosmwasm-stargate';
+import {stringToPath} from '@cosmjs/crypto';
+import {DirectSecp256k1HdWallet, Registry} from '@cosmjs/proto-signing';
 import {makeAuthInfoBytes, makeSignDoc} from '@cosmjs/proto-signing';
-import {decodePubkey} from '@cosmjs/proto-signing';
 import {
   AminoTypes,
   SigningStargateClient,
-  accountFromAny,
   coins,
   createDefaultAminoConverters,
   defaultRegistryTypes,
 } from '@cosmjs/stargate';
-// ================
-import {Tendermint34Client, Tendermint37Client} from '@cosmjs/tendermint-rpc';
-import {MsgSend} from 'cosmjs-types/cosmos/bank/v1beta1/tx.js';
 import {TxRaw} from 'cosmjs-types/cosmos/tx/v1beta1/tx.js';
 import {MsgExecuteContract} from 'cosmjs-types/cosmwasm/wasm/v1/tx.js';
 
-import {EthAccount} from './_account';
+import {CosmWasmClient} from './injectiveCompat';
+import {EXECUTE_MSG_TYPE_URL, HOST_CHAIN, SLAVE_CHAINS, FACTORY_CONTRACT_ADDRESS} from './chains';
+export {EXECUTE_MSG_TYPE_URL, HOST_CHAIN, SLAVE_CHAINS, FACTORY_CONTRACT_ADDRESS, BASE_FEE} from './chains';
 
-export function uint64FromProto(input) {
-  return Uint64.fromString(input.toString());
-}
-export function accountFromBaseAccount(input) {
-  const {address, pubKey, accountNumber, sequence} = input;
-  const pubkey = pubKey ? decodePubkey(pubKey) : null;
-  return {
-    address: address,
-    pubkey: pubkey,
-    accountNumber: uint64FromProto(accountNumber).toNumber(),
-    sequence: uint64FromProto(sequence).toNumber(),
-  };
-}
-
-export class CosmWasmClient extends OrigCosmWasmClient {
-  async getAccount(searchAddress) {
-    try {
-      const account = await this.forceGetQueryClient().auth.account(
-        searchAddress,
-      );
-      const {typeUrl, value} = account;
-      if (typeUrl === '/injective.types.v1beta1.EthAccount') {
-        const baseAcct = EthAccount.decode(value).baseAccount;
-        return accountFromBaseAccount(baseAcct);
-      }
-      return account ? accountFromAny(account) : null;
-    }
-    catch (error) {
-      if (/rpc error: code = NotFound/i.test(error.toString())) {
-        return null;
-      }
-      throw error;
-    }
-  }
-
-  static async connect(endpoint) {
-    let tmClient;
-    const tm37Client = await Tendermint37Client.connect(endpoint);
-    const version = (await tm37Client.status()).nodeInfo.version;
-    if (version.startsWith('0.37.')) {
-      tmClient = tm37Client;
-    }
-    else {
-      tm37Client.disconnect();
-      tmClient = await Tendermint34Client.connect(endpoint);
-    }
-
-    return CosmWasmClient.create(tmClient);
-  }
-
-  static async create(tmClient) {
-    return new CosmWasmClient(tmClient);
-  }
-}
-
-export const EXECUTE_MSG_TYPE_URL = '/cosmwasm.wasm.v1.MsgExecuteContract';
-
-export const HOST_CHAIN = {
-  rpc: 'https://k8s.testnet.tm.injective.network/',
-  chainId: 'injective-888',
-  prefix: 'inj',
-  denoms: [
-    {
-      coinDenom: 'inj',
-      coinMinimalDenom: 'inj',
-      coinDecimals: 18,
-    },
-  ],
-};
-export const SLAVE_CHAINS = {
-  'injective-888': {
-    rpc: 'https://k8s.testnet.tm.injective.network/',
-    prefix: 'inj',
-    name: 'Injective',
-    denoms: [
-      {
-        coinDenom: 'inj',
-        coinMinimalDenom: 'inj',
-        coinDecimals: 18,
-      },
-    ],
-  },
-};
-export const FACTORY_CONTRACT_ADDRESS =
-  'inj1nlu6djpsq22rfees323r8yl8vt8cjwwufc8vks';
-export const BASE_FEE = coins(1000000000000000, 'inj');
-
-export const DEBUG = true;
 export function request(args, wait) {
   if (wait) {
     const eventName = `${wait}-result`;
@@ -137,27 +34,12 @@ export function request(args, wait) {
   }
 }
 
-// FIXME: DEBUG only
-// const a = 'wasm15afv8rty6epfxlhn7pjjl5hs8kff8evpk22ydm';
-// const TEMP_DATA = {
-//   __WARD_default_address: a,
-//   [`__WARD_${a}`]:
-//     '{"type":"directsecp256k1hdwallet-v1","kdf":{"algorithm":"argon2id","params":{"outputLength":32,"opsLimit":24,"memLimitKib":12288}},"encryption":{"algorithm":"xchacha20poly1305-ietf"},"data":"pIOGpgUDlexj0vjG2+q/D9KkW2OdQmcy+xXHeU8JArTNm1tOFa2+Zo6zhzdV1ouuCSug+3v6vuE++wACsZgcYHeqzZfX9HVwQyZ2U9ocQII/cMA6nnWGZw45dso7+qdxLu0geP+94+85npHQgqsCl1wZOqBsk5LbeN0uoNIpqms258FhE9jwt/CbM0gb+2/szMZTjTk592AVZWMXsNUMCGDttw9AGwXP9+IcbJCpae+Hde0JbxiuXh/w37DTFrx4MZYVEHfKfPfJ+ZZATzz+8gACpWy4l+86gsU9SJb18XGaST8IQC+yAUcvW+LCR3JlpWDZgXXtAL6Irvfi56MplsavaLCK8Txshvi6tV6Hdw=="}',
-// };
-
 export async function getKey(key) {
-  // if (DEBUG) return TEMP_DATA[key];
-  // console.log(`Fetching value of key ${key}`);
   const response = await request({type: 'getKey', key}, 'getKey');
   return response.result[key];
 }
 
 export async function setKey(key, value) {
-  // if (DEBUG) {
-  //   TEMP_DATA[key] = value;
-  //   return;
-  // }
-  // console.log(`Setting value of key ${key} to ${value}`);
   return request({type: 'setKey', key, value}, 'setKey');
 }
 
