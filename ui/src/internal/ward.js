@@ -1,25 +1,35 @@
 import {toBinary} from '@cosmjs/cosmwasm-stargate';
 import {stringToPath} from '@cosmjs/crypto';
 import {DirectSecp256k1HdWallet, Registry} from '@cosmjs/proto-signing';
-import {makeAuthInfoBytes, makeSignDoc} from '@cosmjs/proto-signing';
 import {
   AminoTypes,
   SigningStargateClient,
-  coins,
   createDefaultAminoConverters,
   defaultRegistryTypes,
 } from '@cosmjs/stargate';
 import {TxRaw} from 'cosmjs-types/cosmos/tx/v1beta1/tx.js';
 import {MsgExecuteContract} from 'cosmjs-types/cosmwasm/wasm/v1/tx.js';
 
+import {
+  EXECUTE_MSG_TYPE_URL,
+  FACTORY_CONTRACT_ADDRESS,
+  HOST_CHAIN,
+  SLAVE_CHAINS,
+} from './chains';
 import {CosmWasmClient} from './injectiveCompat';
-import {EXECUTE_MSG_TYPE_URL, HOST_CHAIN, SLAVE_CHAINS, FACTORY_CONTRACT_ADDRESS} from './chains';
-export {EXECUTE_MSG_TYPE_URL, HOST_CHAIN, SLAVE_CHAINS, FACTORY_CONTRACT_ADDRESS, BASE_FEE} from './chains';
+
+export {
+  EXECUTE_MSG_TYPE_URL,
+  HOST_CHAIN,
+  SLAVE_CHAINS,
+  FACTORY_CONTRACT_ADDRESS,
+  BASE_FEE,
+} from './chains';
 
 export function request(args, wait) {
   if (wait) {
     const eventName = `${wait}-result`;
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const receiveResponse = (e) => {
         document.removeEventListener(eventName, receiveResponse);
         resolve(e.detail);
@@ -220,18 +230,16 @@ export default class Ward {
   async getAllBalances() {
     const slaves = await this.getSlaveContracts();
     return Promise.all(
-      Object.entries(SLAVE_CHAINS).map(
-        async ([chainId, {rpc, name, denoms}]) => ({
-          chainId,
-          name,
-          address: slaves[chainId],
-          balances: await Promise.all(
-            denoms.map(async (denom) =>
-              this.getBalance(chainId, denom.coinDenom),
-            ),
+      Object.entries(SLAVE_CHAINS).map(async ([chainId, {name, denoms}]) => ({
+        chainId,
+        name,
+        address: slaves[chainId],
+        balances: await Promise.all(
+          denoms.map(async (denom) =>
+            this.getBalance(chainId, denom.coinDenom),
           ),
-        }),
-      ),
+        ),
+      })),
     );
   }
 
@@ -414,7 +422,7 @@ export default class Ward {
     );
   }
 
-  async signDirect(signerAddress, signDoc, password = null) {
+  async signDirect(signerAddress, signDoc, _password = null) {
     throw new Error('Direct signing not supported yet.');
   }
 }

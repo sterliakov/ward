@@ -25,7 +25,7 @@ module.exports = {
       version: 'detect',
     },
   },
-  plugins: ['react', 'sonarjs'],
+  plugins: ['react', 'sonarjs', 'unused-imports'],
   rules: {
     'linebreak-style': [2, 'unix'],
     quotes: [1, 'single', 'avoid-escape'],
@@ -51,6 +51,16 @@ module.exports = {
     'no-constant-condition': ['error', {checkLoops: false}],
     'no-unused-vars': 0,
     'react/prop-types': 0,
+    'unused-imports/no-unused-imports': 2,
+    'unused-imports/no-unused-vars': [
+      2,
+      {
+        vars: 'all',
+        varsIgnorePattern: '^_',
+        args: 'after-used',
+        argsIgnorePattern: '^_',
+      },
+    ],
   },
   overrides: [
     {

@@ -19,6 +19,7 @@ repos:
     hooks:
       - id: eslint
         files: \.jsx?$
+        exclude: ui/config/
         types: [file]
         args: ['--fix', '--config', '.eslintrc.js']
         additional_dependencies:
@@ -26,6 +27,7 @@ repos:
           - eslint-config-prettier
           - eslint-plugin-sonarjs
           - eslint-plugin-react
+          - eslint-plugin-unused-imports
   - repo: https://github.com/pre-commit/mirrors-prettier
     rev: v2.7.1
     hooks:

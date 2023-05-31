@@ -1,4 +1,3 @@
-import {makeSignDoc} from '@cosmjs/amino';
 import {toBinary} from '@cosmjs/cosmwasm-stargate';
 import {coins} from '@cosmjs/stargate';
 import React from 'react';
@@ -17,9 +16,7 @@ import Table from 'react-bootstrap/Table';
 import Ward, {
   BASE_FEE,
   EXECUTE_MSG_TYPE_URL,
-  FACTORY_CONTRACT_ADDRESS,
   HOST_CHAIN,
-  SLAVE_CHAINS,
 } from '../internal/ward';
 
 export class BalanceRow extends React.Component {
@@ -398,9 +395,9 @@ export class ManageOwnScreen extends MessageSender {
   async componentDidMount() {
     const {
       members,
-      recovery_approvals_count,
-      transfer_approvals_count,
-      recovery_progress,
+      // recovery_approvals_count,
+      // transfer_approvals_count,
+      // recovery_progress,
       recovery_method,
       new_owner,
     } = await this.ward.getRecoveryState();

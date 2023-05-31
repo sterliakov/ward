@@ -1,3 +1,5 @@
+import {coins} from '@cosmjs/stargate';
+
 export const EXECUTE_MSG_TYPE_URL = '/cosmwasm.wasm.v1.MsgExecuteContract';
 
 export const HOST_CHAIN = {

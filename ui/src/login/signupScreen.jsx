@@ -1,7 +1,5 @@
-import {makeSignDoc} from '@cosmjs/amino';
 import {toBinary} from '@cosmjs/cosmwasm-stargate';
 import {Bip39, Random} from '@cosmjs/crypto';
-import {coins} from '@cosmjs/stargate';
 import React from 'react';
 import {ArrowClockwise} from 'react-bootstrap-icons';
 import Alert from 'react-bootstrap/Alert';
@@ -9,10 +7,8 @@ import Button from 'react-bootstrap/Button';
 import Col from 'react-bootstrap/Col';
 import FloatingLabel from 'react-bootstrap/FloatingLabel';
 import Form from 'react-bootstrap/Form';
-import Nav from 'react-bootstrap/Nav';
 import Row from 'react-bootstrap/Row';
 import Spinner from 'react-bootstrap/Spinner';
-import Tab from 'react-bootstrap/Tab';
 
 import Ward, {
   BASE_FEE,

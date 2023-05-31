@@ -9,7 +9,7 @@ export default function () {
   container.insertBefore(scriptElement, container.children[0]);
   scriptElement.remove();
 
-  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type.endsWith('-result')) {
       console.warn('Result received (content-script)', msg);
       document.dispatchEvent(new CustomEvent(msg.type, {detail: msg}));
