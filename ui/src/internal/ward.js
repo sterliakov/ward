@@ -52,7 +52,7 @@ export const SLAVE_CHAINS = {
   },
 };
 export const FACTORY_CONTRACT_ADDRESS =
-  'wasm1p3nekml39axny2z2up30vpa05wqx5pxtxex9dd4277mmjsgergcql4zg7x';
+  'wasm1ses0u78l6vww6vyg3mg7uev7f4ygrv9k8kr3tcxtuelf8ajydfes4y77ac';
 
 // export const HOST_CONTRACT_ADDRESS =
 //   'wasm1ctnjk7an90lz5wjfvr3cf6x984a8cjnv8dpmztmlpcq4xteaa2xsfr3xd0';

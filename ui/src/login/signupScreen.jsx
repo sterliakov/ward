@@ -171,9 +171,10 @@ export class NewAccountScreen extends React.Component {
     );
     const ward = new Ward();
 
-    if (this.target === 'restore') {
+    if (this.props.target === 'restore') {
       const existing = ward.getHostContract();
       if (!existing) this.setState({error: 'Account not found.'});
+      else this.setState({inProgress: false, txHash: true}); // TODO: clean
       return;
     }
 

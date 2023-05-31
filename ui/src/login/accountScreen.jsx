@@ -324,13 +324,13 @@ export class AccountState extends React.Component {
 }
 
 export class MessageSender extends React.Component {
-  async sendMessage(msg) {
+  async sendMessage(msg, contract) {
     const {chainId} = HOST_CHAIN;
     const wrapped = {
       typeUrl: EXECUTE_MSG_TYPE_URL,
       value: {
         sender: await this.ward.getLocalAddress(),
-        contract: await this.ward.getHostContract(),
+        contract,
         msg: toBinary(msg),
         funds: [],
       },
@@ -417,9 +417,12 @@ export class ManageOwnScreen extends MessageSender {
     if (this.requirePassword()) return;
     this.setState({error: null, inProgress: true});
     try {
-      await this.sendMessage({
-        add_recovery_member: {member: this.state.newRecoveryMember},
-      });
+      await this.sendMessage(
+        {
+          add_recovery_member: {member: this.state.newRecoveryMember},
+        },
+        await this.ward.getHostContract(),
+      );
     }
     catch (ex) {
       return;
@@ -430,9 +433,12 @@ export class ManageOwnScreen extends MessageSender {
     if (this.requirePassword()) return;
     this.setState({error: null, inProgress: true});
     try {
-      await this.sendMessage({
-        remove_recovery_member: {member: addr},
-      });
+      await this.sendMessage(
+        {
+          remove_recovery_member: {member: addr},
+        },
+        await this.ward.getHostContract(),
+      );
     }
     catch (ex) {
       return;
@@ -443,9 +449,12 @@ export class ManageOwnScreen extends MessageSender {
     if (this.requirePassword()) return;
     this.setState({error: null, inProgress: true});
     try {
-      await this.sendMessage({
-        begin_transfer_ownership: {target_addr: this.state.newOwner},
-      });
+      await this.sendMessage(
+        {
+          begin_transfer_ownership: {target_addr: this.state.newOwner},
+        },
+        await this.ward.getHostContract(),
+      );
     }
     catch (ex) {
       return;
@@ -624,9 +633,12 @@ export class ManageOtherScreen extends MessageSender {
     if (this.requirePassword()) return;
     this.setState({error: null, inProgress: true});
     try {
-      await this.sendMessage({
-        [this.state.recoveryMethod]: {target_addr: this.state.newOwner},
-      });
+      await this.sendMessage(
+        {
+          [this.state.recoveryMethod]: {target_addr: this.state.newOwner},
+        },
+        await Ward.getHostContract(this.state.oldOwner),
+      );
     }
     catch (ex) {
       return;
