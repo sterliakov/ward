@@ -1,64 +1,122 @@
 import {encodeSecp256k1Signature, serializeSignDoc} from '@cosmjs/amino';
-import {CosmWasmClient, toBinary} from '@cosmjs/cosmwasm-stargate';
-import {Secp256k1, sha256} from '@cosmjs/crypto';
+import {
+  CosmWasmClient as OrigCosmWasmClient,
+  toBinary,
+} from '@cosmjs/cosmwasm-stargate';
+import {Secp256k1, sha256, stringToPath} from '@cosmjs/crypto';
 // test
 // ================
 import {fromBase64} from '@cosmjs/encoding';
+import {Uint64} from '@cosmjs/math';
 import {
   DirectSecp256k1HdWallet,
   Registry,
   makeSignBytes,
 } from '@cosmjs/proto-signing';
 import {makeAuthInfoBytes, makeSignDoc} from '@cosmjs/proto-signing';
+import {decodePubkey} from '@cosmjs/proto-signing';
 import {
   AminoTypes,
   SigningStargateClient,
+  accountFromAny,
   coins,
   createDefaultAminoConverters,
   defaultRegistryTypes,
 } from '@cosmjs/stargate';
+// ================
+import {Tendermint34Client, Tendermint37Client} from '@cosmjs/tendermint-rpc';
 import {MsgSend} from 'cosmjs-types/cosmos/bank/v1beta1/tx.js';
 import {TxRaw} from 'cosmjs-types/cosmos/tx/v1beta1/tx.js';
 import {MsgExecuteContract} from 'cosmjs-types/cosmwasm/wasm/v1/tx.js';
 
-// ================
+import {EthAccount} from './_account';
+
+export function uint64FromProto(input) {
+  return Uint64.fromString(input.toString());
+}
+export function accountFromBaseAccount(input) {
+  const {address, pubKey, accountNumber, sequence} = input;
+  const pubkey = pubKey ? decodePubkey(pubKey) : null;
+  return {
+    address: address,
+    pubkey: pubkey,
+    accountNumber: uint64FromProto(accountNumber).toNumber(),
+    sequence: uint64FromProto(sequence).toNumber(),
+  };
+}
+
+export class CosmWasmClient extends OrigCosmWasmClient {
+  async getAccount(searchAddress) {
+    try {
+      const account = await this.forceGetQueryClient().auth.account(
+        searchAddress,
+      );
+      const {typeUrl, value} = account;
+      if (typeUrl === '/injective.types.v1beta1.EthAccount') {
+        const baseAcct = EthAccount.decode(value).baseAccount;
+        return accountFromBaseAccount(baseAcct);
+      }
+      return account ? accountFromAny(account) : null;
+    }
+    catch (error) {
+      if (/rpc error: code = NotFound/i.test(error.toString())) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  static async connect(endpoint) {
+    let tmClient;
+    const tm37Client = await Tendermint37Client.connect(endpoint);
+    const version = (await tm37Client.status()).nodeInfo.version;
+    if (version.startsWith('0.37.')) {
+      tmClient = tm37Client;
+    }
+    else {
+      tm37Client.disconnect();
+      tmClient = await Tendermint34Client.connect(endpoint);
+    }
+
+    return CosmWasmClient.create(tmClient);
+  }
+
+  static async create(tmClient) {
+    return new CosmWasmClient(tmClient);
+  }
+}
 
 export const EXECUTE_MSG_TYPE_URL = '/cosmwasm.wasm.v1.MsgExecuteContract';
 
 export const HOST_CHAIN = {
-  rpc: 'http://localhost:26657/',
-  chainId: 'foo-1',
-  prefix: 'wasm',
+  rpc: 'https://k8s.testnet.tm.injective.network/',
+  chainId: 'injective-888',
+  prefix: 'inj',
   denoms: [
     {
-      coinDenom: 'stake',
-      coinMinimalDenom: 'ustake',
-      coinDecimals: 6,
+      coinDenom: 'inj',
+      coinMinimalDenom: 'inj',
+      coinDecimals: 18,
     },
   ],
 };
 export const SLAVE_CHAINS = {
-  'foo-1': {
-    rpc: 'http://localhost:26657/',
-    prefix: 'wasm',
-    name: 'testnet',
+  'injective-888': {
+    rpc: 'https://k8s.testnet.tm.injective.network/',
+    prefix: 'inj',
+    name: 'Injective',
     denoms: [
       {
-        coinDenom: 'stake',
-        coinMinimalDenom: 'ustake',
-        coinDecimals: 6,
+        coinDenom: 'inj',
+        coinMinimalDenom: 'inj',
+        coinDecimals: 18,
       },
     ],
   },
 };
 export const FACTORY_CONTRACT_ADDRESS =
-  'wasm1ses0u78l6vww6vyg3mg7uev7f4ygrv9k8kr3tcxtuelf8ajydfes4y77ac';
-
-// export const HOST_CONTRACT_ADDRESS =
-//   'wasm1ctnjk7an90lz5wjfvr3cf6x984a8cjnv8dpmztmlpcq4xteaa2xsfr3xd0';
-// export const SLAVE_ADDRESSES = {
-//   'foo-1': 'wasm14xc5dkz0rn8j99lxz69mkv3wzawmadg7xurkzy49m9yefmqx5c6sv5vy55',
-// };
+  'inj1nlu6djpsq22rfees323r8yl8vt8cjwwufc8vks';
+export const BASE_FEE = coins(1000000000000000, 'inj');
 
 export const DEBUG = true;
 export function request(args, wait) {
@@ -111,13 +169,25 @@ export default class Ward {
   }
 
   static async validateMnemonic(mnemonic, opts = {}) {
-    const wallet = await DirectSecp256k1HdWallet.fromMnemonic(mnemonic, opts);
+    const baseOpts = {
+      hdPaths: [stringToPath("m/44'/60'/0'/0")],
+    };
+    const wallet = await DirectSecp256k1HdWallet.fromMnemonic(
+      mnemonic,
+      {...baseOpts, ...opts},
+    );
     const {address} = (await wallet.getAccounts())[0];
     return address;
   }
 
   static async createFromMnemonic(mnemonic, ourPassword, opts = {}) {
-    const wallet = await DirectSecp256k1HdWallet.fromMnemonic(mnemonic, opts);
+    const baseOpts = {
+      hdPaths: [stringToPath("m/44'/60'/0'/0")],
+    };
+    const wallet = await DirectSecp256k1HdWallet.fromMnemonic(
+      mnemonic,
+      {...baseOpts, ...opts},
+    );
     const stored = await wallet.serialize(ourPassword);
     const {address} = (await wallet.getAccounts())[0];
     await setKey('__WARD_default_address', address);

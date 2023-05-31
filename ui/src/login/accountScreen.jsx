@@ -15,6 +15,7 @@ import Tab from 'react-bootstrap/Tab';
 import Table from 'react-bootstrap/Table';
 
 import Ward, {
+  BASE_FEE,
   EXECUTE_MSG_TYPE_URL,
   FACTORY_CONTRACT_ADDRESS,
   HOST_CHAIN,
@@ -73,7 +74,7 @@ export class TransferScreen extends React.Component {
         },
       },
     };
-    const fee = {amount: [], gas: '250000'};
+    const fee = {amount: BASE_FEE, gas: '250000'};
     const signed = await ward.signSimple(
       chainId,
       sendMsg,
@@ -230,7 +231,7 @@ export class AccountState extends React.Component {
   };
 
   componentDidMount() {
-    this._asyncRequest = new Ward()
+    new Ward()
       .getAllBalances()
       .then((balances) => {
         this._asyncRequest = null;
@@ -238,9 +239,6 @@ export class AccountState extends React.Component {
         else this.setState({balances: [], error: 'Failed to fetch balances.'});
       })
       .catch((ex) => this.setState({error: ex.toString()}));
-  }
-  componentWillUnmount() {
-    if (this._asyncRequest) this._asyncRequest.cancel();
   }
 
   render() {
@@ -335,7 +333,7 @@ export class MessageSender extends React.Component {
         funds: [],
       },
     };
-    const fee = {amount: [], gas: '400000'};
+    const fee = {amount: BASE_FEE, gas: '400000'};
     const signed = await this.ward.signSimpleAsSelf(
       chainId,
       wrapped,

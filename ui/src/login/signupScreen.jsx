@@ -15,6 +15,7 @@ import Spinner from 'react-bootstrap/Spinner';
 import Tab from 'react-bootstrap/Tab';
 
 import Ward, {
+  BASE_FEE,
   EXECUTE_MSG_TYPE_URL,
   FACTORY_CONTRACT_ADDRESS,
   HOST_CHAIN,
@@ -111,7 +112,7 @@ export class NewAccountScreen extends React.Component {
         funds: [],
       },
     };
-    const fee = {amount: [], gas: '400000'};
+    const fee = {amount: BASE_FEE, gas: '400000'};
     const signed = await ward.signSimpleAsSelf(
       chainId,
       wrapped,
@@ -433,7 +434,7 @@ export class NewAccountScreen extends React.Component {
                     {this.state.error && (
                       <Alert variant="danger">{this.state.error}</Alert>
                     )}
-                    {this.state.txHash ? (
+                    {this.state.txHash && !this.state.error ? (
                       <>
                         <Alert variant="success">
                           <Alert.Heading>Creation complete!</Alert.Heading>
